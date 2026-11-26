@@ -14,7 +14,7 @@ body { font: 9.5pt/1.45 "Inter", "Helvetica Neue", Arial, sans-serif; color: #16
 .testata .nome { white-space: nowrap; font-size: 16pt; font-weight: 700; letter-spacing: -.01em; }
 .testata .dati { text-align: right; font-size: 8pt; color: #454d66; line-height: 1.4; }
 .piede { position: running(piede); border-top: .6pt solid #c9cedc; padding-top: 2.5mm; font-size: 7.5pt; color: #6f7892; display: flex; justify-content: space-between; gap: 8mm; }
-.piede .pagina::after { content: "Pagina " counter(page) " di " counter(pages); white-space: nowrap; }
+.piede .pagina::after { content: "{% t 'Pagina' 'Page' %} " counter(page) " {% t 'di' 'of' %} " counter(pages); white-space: nowrap; }
 .noprint, .msgs { display: none !important; }
 h1 { font-size: 17pt; margin: 0 0 1mm; letter-spacing: -.01em; }
 h3 { font-size: 7.5pt; text-transform: uppercase; letter-spacing: .06em; color: #6f7892; margin: 0 0 1.5mm; }
@@ -27,6 +27,7 @@ th { font-size: 7.5pt; text-transform: uppercase; letter-spacing: .05em; color: 
 td.n, th.n { text-align: right; white-space: nowrap; }
 tr.tot td { font-weight: 700; border-bottom: .9pt solid #161b2e; }
 tr { break-inside: avoid; }
+table.fitto th, table.fitto td { padding: 1.6mm 1.3mm; font-size: 8pt; }
 .dl { display: grid; grid-template-columns: max-content 1fr; gap: 1mm 6mm; margin: 6mm 0 0; } .dl dt { color: #6f7892; } .dl dd { margin: 0; }
 .firma { display: flex; gap: 14mm; margin-top: 16mm; break-inside: avoid; } .firma div { flex: 1; border-top: .7pt solid #161b2e; padding-top: 1.5mm; font-size: 8.5pt; }
 .badge { font-weight: 600; }

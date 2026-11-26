@@ -1,0 +1,9 @@
+{% extends "ws/base.html" %}
+{% load humanize %}
+{% block title %}Spedizioni{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Spedizioni</h1><div class="sub">Packing list e dichiarazione multimodale delle merci pericolose. Si creano dall'ordine cliente.</div></div><div class="actions"><a class="btn sec" href="{% url 'nuovo' 'spedizione' %}">+ Spedizione manuale</a></div></div>
+<div class="card"><div class="tw"><table><tr><th>Spedizione</th><th>Data</th><th>Cliente</th><th>Ordine</th><th>Nave / container</th><th class="n">Pallet</th><th class="n">Peso lordo</th></tr>
+{% for sp in spedizioni %}{% with tot=sp.totali %}<tr><td><a href="{{ sp.get_absolute_url }}">{{ sp.numero }}</a></td><td>{{ sp.data|date:"d/m/Y" }}</td><td>{{ sp.cliente }}</td><td>{% if sp.ordine %}<a href="{{ sp.ordine.get_absolute_url }}">{{ sp.ordine.numero }}</a>{% else %}—{% endif %}</td><td class="small">{{ sp.nave_viaggio|default:"—" }}<br>{{ sp.container }}</td><td class="n">{{ tot.pallet }}</td><td class="n">{{ tot.lordo|floatformat:"0g" }} kg</td></tr>{% endwith %}
+{% empty %}<tr><td colspan="7" class="muted">Nessuna spedizione.</td></tr>{% endfor %}</table></div></div>
+{% endblock %}

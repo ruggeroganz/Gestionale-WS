@@ -16,6 +16,7 @@ from .models import (
     Artwork,
     Azienda,
     Brief,
+    Collo,
     Campionatura,
     Cliente,
     Componente,
@@ -38,6 +39,7 @@ from .models import (
     RigaOrdine,
     RigaPreFattura,
     RigaQuotazione,
+    Spedizione,
     TestStabilita,
     VersioneFormula,
     VoceListino,
@@ -45,7 +47,7 @@ from .models import (
 
 # Modelli modificabili dall'interfaccia con il form generico: nome -> (modello, campi)
 CRUD = {
-    "cliente": (Cliente, ["ragione_sociale", "tipo", "stato", "partita_iva", "codice_fiscale", "indirizzo", "cap", "comune", "provincia", "codice_paese", "paese", "codice_sdi", "pec", "pagamento", "email", "telefono", "commerciale", "note"]),
+    "cliente": (Cliente, ["ragione_sociale", "tipo", "stato", "partita_iva", "codice_fiscale", "indirizzo", "cap", "comune", "provincia", "codice_paese", "paese", "codice_sdi", "pec", "pagamento", "lingua_documenti", "email", "telefono", "commerciale", "note"]),
     "contatto": (Contatto, ["cliente", "nome", "ruolo", "email", "telefono"]),
     "produttore": (Produttore, ["nome", "paese", "indirizzo", "partita_iva", "modello_brief", "lead_time_giorni", "email", "telefono", "note"]),
     "progetto": (Progetto, ["nome", "cliente", "produttore", "tipo_prodotto", "sviluppo", "versione_formula", "responsabile", "quantita_prevista", "prezzo_target", "data_consegna_richiesta", "lead_time_giorni", "campione_packaging", "stato", "brief"]),
@@ -58,17 +60,19 @@ CRUD = {
     "componente": (Componente, ["codice", "tipo", "descrizione", "materiale", "formato", "note"]),
     "artwork": (Artwork, ["cliente", "progetto", "nome", "versione_formula", "stato", "data_tds_richiesto", "data_tds_ricevuto", "file_tds", "file", "data_approvazione", "costo_impianto", "prezzo_impianto", "impianto_ordinato", "impianto_fatturato", "note"]),
     "packaging": (Packaging, ["cliente", "componente", "descrizione", "decorazione", "colore", "artwork", "riporta_inci", "moq", "costo_unitario", "prezzo_unitario", "note"]),
-    "prodotto": (Prodotto, ["codice", "nome", "cliente", "progetto", "versione_formula", "formato", "prossima_consegna", "attivo"]),
+    "prodotto": (Prodotto, ["codice", "nome", "cliente", "progetto", "versione_formula", "formato", "prossima_consegna", "hs_code", "pezzi_per_cartone", "un_numero", "un_denominazione", "un_classe", "un_ems", "quantita_limitata", "imballo_interno", "attivo"]),
     "rigadistinta": (RigaDistinta, ["prodotto", "packaging", "quantita_per_pezzo", "etichetta_correttiva"]),
     "movimento": (MovimentoPackaging, ["packaging", "produttore", "data", "tipo", "quantita", "note"]),
     "ordine": (OrdineCliente, ["cliente", "progetto", "produttore", "data", "data_consegna_prevista", "stato", "riferimento_cliente", "note"]),
-    "rigaordine": (RigaOrdine, ["ordine", "prodotto", "quantita", "prezzo_unitario"]),
+    "rigaordine": (RigaOrdine, ["ordine", "prodotto", "quantita", "prezzo_unitario", "lotto"]),
     "vocelistino": (VoceListino, ["produttore", "formula", "tipo", "descrizione", "quantita_minima", "costo_unitario", "prezzo_unitario", "valido_dal", "valido_fino", "note"]),
     "promemoria": (Promemoria, ["testo", "scadenza", "cliente", "progetto", "assegnato_a", "fatto"]),
-    "azienda": (Azienda, ["ragione_sociale", "partita_iva", "codice_fiscale", "regime_fiscale", "indirizzo", "cap", "comune", "provincia", "codice_paese", "iban", "email", "telefono", "logo", "piede_documenti"]),
+    "azienda": (Azienda, ["ragione_sociale", "partita_iva", "codice_fiscale", "regime_fiscale", "indirizzo", "cap", "comune", "provincia", "codice_paese", "iban", "email", "telefono", "logo", "piede_documenti", "contatto_emergenza", "dichiarante"]),
     "acquisto": (OrdineAcquisto, ["produttore", "ordine", "data", "data_consegna_richiesta", "stato", "ddt_fornitore", "fattura_fornitore", "importo_fattura_fornitore", "note"]),
     "rigaacquisto": (RigaAcquisto, ["ordine_acquisto", "tipo", "descrizione", "quantita", "costo_unitario"]),
-    "ddt": (DDT, ["cliente", "ordine", "data", "luogo_partenza", "destinazione", "causale", "vettore", "porto", "colli", "peso_kg", "aspetto", "note"]),
+    "ddt": (DDT, ["cliente", "ordine", "data", "luogo_partenza", "destinazione", "causale", "vettore", "porto", "colli", "peso_kg", "peso_netto_kg", "aspetto", "note"]),
+    "spedizione": (Spedizione, ["cliente", "ordine", "data", "riferimenti", "resa", "vettore", "nave_viaggio", "container", "sigillo", "porto_imbarco", "porto_sbarco", "destinazione", "note"]),
+    "collo": (Collo, ["spedizione", "prodotto", "descrizione", "quantita", "lotto", "cartoni", "peso_lordo_kg", "peso_netto_kg", "dimensioni", "un", "descrizione_adr"]),
     "rigaddt": (RigaDDT, ["ddt", "codice", "descrizione", "quantita", "lotto"]),
     "prefattura": (PreFattura, ["cliente", "ordine", "ddt", "data", "aliquota_iva", "natura", "pagamento", "data_scadenza", "stato", "numero_fattura", "data_fattura", "pagata", "data_pagamento", "note"]),
     "rigaprefattura": (RigaPreFattura, ["prefattura", "tipo", "codice", "descrizione", "quantita", "prezzo_unitario"]),
@@ -713,6 +717,8 @@ DOCUMENTI_PDF = {
     "ddt": (DDT, "ws/ddt.html", "d", lambda o: f"DDT {o.numero}"),
     "prefattura": (PreFattura, "ws/prefattura.html", "d", lambda o: f"Pre-fattura {o.numero}"),
     "acquisto": (OrdineAcquisto, "ws/acquisto.html", "d", lambda o: f"Ordine d'acquisto {o.numero}"),
+    "packing": (Spedizione, "ws/packing_list.html", "sp", lambda o: f"Packing list {o.numero}"),
+    "multimodale": (Spedizione, "ws/multimodale.html", "sp", lambda o: f"Multimodal DGD {o.numero}"),
 }
 
 
@@ -725,19 +731,32 @@ def crea_pdf(request, tipo, obj):
     _, template, variabile, nome = DOCUMENTI_PDF[tipo]
     az = Azienda.corrente()
     font = finders.find("ws/font/inter-latin-wght-normal.woff2")
-    html = render_to_string(
+    from django.utils import translation
+
+    from .templatetags.formati import lingua_di
+
+    lingua = lingua_di({variabile: obj})
+    with translation.override(lingua):  # numeri e date nel formato della lingua del documento
+        html = _html_pdf(request, template, variabile, obj, az, font)
+    return f"{nome(obj)}.pdf", HTML(string=html).write_pdf()
+
+
+def _html_pdf(request, template, variabile, obj, az, font):
+    from django.template.loader import render_to_string
+
+    return render_to_string(
         template,
         {
             variabile: obj,
-            "righe": obj.righe.all(),
+            "righe": obj.righe.all() if hasattr(obj, "righe") else [],
             "azienda": az,
             "base_template": "ws/pdf_base.html",
             "logo_url": f"file://{az.logo.path}" if az.pk and az.logo else "",
             "font_url": f"file://{font}" if font else "",
+            "pericolose": obj.merci_pericolose() if isinstance(obj, Spedizione) else [],
         },
         request=request,
     )
-    return f"{nome(obj)}.pdf", HTML(string=html).write_pdf()
 
 
 @login_required
@@ -868,3 +887,42 @@ def brief_scarica(request, pk):
     nome = "".join(ch if ch.isalnum() or ch in " -_" else " " for ch in b.progetto.nome).strip()
     risposta["Content-Disposition"] = f'attachment; filename="Technical Brief {nome}.docx"'
     return risposta
+
+
+# --------------------------------------------------------------------------
+# Spedizioni
+# --------------------------------------------------------------------------
+@richiede("add", Spedizione)
+@require_POST
+def ordine_genera_spedizione(request, pk):
+    return _genera(request, pk, documenti.genera_spedizione)
+
+
+@login_required
+def spedizioni(request):
+    qs = Spedizione.objects.select_related("cliente", "ordine").prefetch_related("colli")
+    return render(request, "ws/spedizioni.html", {"spedizioni": qs})
+
+
+@login_required
+def spedizione(request, pk):
+    sp = get_object_or_404(Spedizione.objects.select_related("cliente", "ordine"), pk=pk)
+    az = Azienda.corrente()
+    mancanti = []
+    pericolose = sp.merci_pericolose()
+    if pericolose:
+        if not az.contatto_emergenza:
+            mancanti.append("contatto d'emergenza 24h (in Dati azienda)")
+        if not az.dichiarante:
+            mancanti.append("dichiarante (in Dati azienda)")
+        for g in pericolose:
+            p = g["prodotto"]
+            if p is None and not g["collo"].descrizione_adr:
+                mancanti.append(f"descrizione per la dichiarazione sul pallet {g['collo'].numero}")
+            elif p is not None and not (p.un_denominazione and p.un_classe):
+                mancanti.append(f"denominazione di trasporto e classe sul prodotto {p.codice}")
+    return render(
+        request,
+        "ws/spedizione.html",
+        {"sp": sp, "colli": sp.colli.select_related("prodotto"), "pericolose": pericolose, "mancanti": mancanti},
+    )

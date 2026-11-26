@@ -44,6 +44,7 @@
     <div class="sep">Documenti</div>
     <a href="{% url 'acquisti' %}" class="{% if n == 'acquisti' or n == 'acquisto' %}on{% endif %}"><svg class="ic"><use href="#i-acquisti"/></svg>Ordini ai produttori</a>
     <a href="{% url 'ddt_elenco' %}" class="{% if n == 'ddt_elenco' or n == 'ddt' %}on{% endif %}"><svg class="ic"><use href="#i-ddt"/></svg>DDT</a>
+    <a href="{% url 'spedizioni' %}" class="{% if n == 'spedizioni' or n == 'spedizione' %}on{% endif %}"><svg class="ic"><use href="#i-prodotti"/></svg>Spedizioni</a>
     <a href="{% url 'prefatture' %}" class="{% if n == 'prefatture' or n == 'prefattura' %}on{% endif %}"><svg class="ic"><use href="#i-fatture"/></svg>Pre-fatture</a>
     {% endwith %}
   </nav>

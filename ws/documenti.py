@@ -15,6 +15,8 @@ from .models import (
     RigaAcquisto,
     RigaDDT,
     RigaPreFattura,
+    Spedizione,
+    Collo,
     TipoRiga,
     euro,
 )
@@ -106,6 +108,7 @@ def genera_ddt(ordine):
         ordine=ordine,
         luogo_partenza=" · ".join(x for x in (ordine.produttore.nome, ordine.produttore.indirizzo) if x),
         destinazione=", ".join(x for x in (c.indirizzo, f"{c.cap} {c.comune}".strip(), c.provincia) if x),
+        note=note_spedizione(ordine),
     )
     for r in righe:
         RigaDDT.objects.create(
@@ -113,8 +116,43 @@ def genera_ddt(ordine):
             codice=r.prodotto.codice,
             descrizione=" · ".join(x for x in (r.prodotto.nome, r.prodotto.formato) if x),
             quantita=r.quantita,
+            lotto=r.lotto,
         )
     return ddt
+
+
+NOTA_LQ = "DANGEROUS GOODS {un} SHIPPED UNDER ADR EXEMPTION FOR LIMITED QUANTITIES ACCORDING TO ADR CHAPTER 3.4"
+
+
+def note_spedizione(ordine):
+    """Note standard per DDT e fattura: voce doganale e, se serve, dicitura merci pericolose in quantità limitata."""
+    prodotti = [r.prodotto for r in ordine.righe.select_related("prodotto")]
+    righe = [f"HS CODE {c}" for c in sorted({p.hs_code for p in prodotti if p.hs_code})]
+    righe += [NOTA_LQ.format(un=u) for u in sorted({p.un_numero.replace(" ", "") for p in prodotti if p.un_numero and p.quantita_limitata})]
+    return "\n".join(righe)
+
+
+@transaction.atomic
+def genera_spedizione(ordine):
+    """Spedizione con un pallet per riga d'ordine, da suddividere e completare con pesi e dimensioni."""
+    righe = _righe_ordine(ordine)
+    c = ordine.cliente
+    sp = Spedizione.objects.create(
+        cliente=c,
+        ordine=ordine,
+        riferimenti=", ".join(f"DDT n. {d.numero}" for d in ordine.ddt.all()),
+        destinazione=", ".join(x for x in (c.indirizzo, f"{c.cap} {c.comune}".strip(), c.paese) if x),
+    )
+    for r in righe:
+        p = r.prodotto
+        Collo.objects.create(
+            spedizione=sp,
+            prodotto=p,
+            quantita=r.quantita,
+            lotto=r.lotto,
+            cartoni=-(-r.quantita // p.pezzi_per_cartone) if p.pezzi_per_cartone else None,
+        )
+    return sp
 
 
 def iva_predefinita(cliente):
@@ -135,6 +173,7 @@ def genera_prefattura(ordine):
         aliquota_iva=aliquota,
         natura=natura,
         pagamento=ordine.cliente.pagamento,
+        note=note_spedizione(ordine),
     )
     for r in righe:
         RigaPreFattura.objects.create(

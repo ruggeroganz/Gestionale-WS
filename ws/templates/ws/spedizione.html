@@ -1,0 +1,22 @@
+{% extends "ws/base.html" %}
+{% load humanize %}
+{% block title %}Spedizione {{ sp.numero }}{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Spedizione {{ sp.numero }}</h1><div class="sub"><a href="{{ sp.cliente.get_absolute_url }}">{{ sp.cliente }}</a> · {{ sp.data|date:"d/m/Y" }}{% if sp.ordine %} · ordine <a href="{{ sp.ordine.get_absolute_url }}">{{ sp.ordine.numero }}</a>{% endif %} · resa {{ sp.resa }}</div></div>
+  <div class="actions"><a class="btn sec" href="{% url 'modifica' 'spedizione' sp.pk %}">Modifica dati di spedizione</a><a class="btn" href="{% url 'pdf' 'packing' sp.pk %}">Packing list (PDF)</a>{% if pericolose %}<a class="btn" href="{% url 'pdf' 'multimodale' sp.pk %}">Multimodale merci pericolose (PDF)</a>{% endif %}</div></div>
+{% if mancanti %}<div class="alert"><strong>Per la dichiarazione merci pericolose mancano:</strong> {{ mancanti|join:"; " }}.</div>{% endif %}
+{% if pericolose %}<div class="alert bad">Questa spedizione contiene merci pericolose. La dichiarazione multimodale è un documento con valore legale: prima di firmarla va controllata riga per riga da chi ne ha la responsabilità.</div>{% endif %}
+<div class="grid g21"><div>
+  <div class="card"><div class="ch"><h2>Pallet</h2><a class="btn sm" href="{% url 'nuovo' 'collo' %}?spedizione={{ sp.pk }}">+ Pallet</a></div>
+  {% if colli %}<div class="tw"><table><tr><th>N.</th><th>Merce</th><th>Lotto</th><th class="n">Pezzi</th><th class="n">Cartoni</th><th class="n">Lordo kg</th><th class="n">Netto kg</th><th>Dimensioni</th><th>UN</th><th></th></tr>
+  {% for c in colli %}<tr><td>{{ c.numero }}</td><td>{% if c.prodotto %}<strong>{{ c.prodotto.codice }}</strong> · {% endif %}{{ c.descrizione }}</td><td>{{ c.lotto|default:"—" }}</td><td class="n">{{ c.quantita|default:""|intcomma }}</td><td class="n">{{ c.cartoni|default:"" }}</td><td class="n">{{ c.peso_lordo_kg|default:""|floatformat:"-2" }}</td><td class="n">{{ c.peso_netto_kg|default:""|floatformat:"-2" }}</td><td>{{ c.dimensioni|default:"—" }}</td>
+    <td>{% if c.un %}<span class="badge bad">{{ c.un }}</span>{% else %}<span class="muted small">non pericoloso</span>{% endif %}</td><td class="act"><a href="{% url 'modifica' 'collo' c.pk %}">modifica</a></td></tr>{% endfor %}
+  {% with tot=sp.totali %}<tr class="tot"><td colspan="3">{{ tot.pallet }} pallet</td><td class="n">{{ tot.pezzi|intcomma }}</td><td class="n">{{ tot.cartoni }}</td><td class="n">{{ tot.lordo|floatformat:"-2" }}</td><td class="n">{{ tot.netto|floatformat:"-2" }}</td><td colspan="3"></td></tr>{% endwith %}
+  </table></div>{% else %}<div class="empty">Aggiungi un pallet per riga del packing list: prodotto, lotto, pezzi, cartoni, pesi e dimensioni.</div>{% endif %}</div>
+</div><div>
+  <div class="card"><div class="ch"><h2>Trasporto</h2></div><div class="cb"><dl class="dl">
+    <dt>Riferimenti</dt><dd>{{ sp.riferimenti|default:"—" }}</dd><dt>Vettore</dt><dd>{{ sp.vettore|default:"—" }}</dd><dt>Nave / volo</dt><dd>{{ sp.nave_viaggio|default:"—" }}</dd>
+    <dt>Container</dt><dd>{{ sp.container|default:"—" }}</dd><dt>Sigillo</dt><dd>{{ sp.sigillo|default:"—" }}</dd><dt>Imbarco</dt><dd>{{ sp.porto_imbarco|default:"—" }}</dd><dt>Sbarco</dt><dd>{{ sp.porto_sbarco|default:"—" }}</dd><dt>Destinazione</dt><dd>{{ sp.destinazione|default:"—" }}</dd></dl>
+    {% if sp.note %}<p style="margin-top:10px">{{ sp.note|linebreaksbr }}</p>{% endif %}</div></div>
+</div></div>
+{% endblock %}

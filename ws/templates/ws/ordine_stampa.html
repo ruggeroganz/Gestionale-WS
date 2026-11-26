@@ -4,15 +4,15 @@
 {% block content %}
 <div class="actions noprint" style="margin-bottom:14px"><a class="btn sec" href="{{ o.get_absolute_url }}">← Torna all'ordine</a><a class="btn" href="{% url 'pdf' 'conferma' o.pk %}">Scarica PDF</a></div>
 <div class="doc">
-  <h1>Conferma d'ordine {{ o.numero }}</h1><div class="muted">del {{ o.data|date:"d/m/Y" }}{% if o.riferimento_cliente %} · Vs. riferimento {{ o.riferimento_cliente }}{% endif %}</div>
-  <div class="parti"><div><h3>Fornitore</h3><strong>{{ NOME_AZIENDA }}</strong></div>
-    <div><h3>Cliente</h3><strong>{{ o.cliente.ragione_sociale }}</strong><br>{{ o.cliente.indirizzo }}<br>{% if o.cliente.partita_iva %}P. IVA {{ o.cliente.partita_iva }}{% endif %}</div></div>
-  <table><tr><th>Codice</th><th>Descrizione</th><th class="n">Quantità</th><th class="n">Prezzo unitario</th><th class="n">Importo</th></tr>
+  <h1>{% t "Conferma d'ordine" "Order confirmation" %} {{ o.numero }}</h1><div class="muted">{% t "del" "dated" %} {{ o.data|date:"d/m/Y" }}{% if o.riferimento_cliente %} · {% t "Vs. riferimento" "Your reference" %} {{ o.riferimento_cliente }}{% endif %}</div>
+  <div class="parti"><div><h3>{% t "Fornitore" "Supplier" %}</h3><strong>{{ NOME_AZIENDA }}</strong></div>
+    <div><h3>{% t "Cliente" "Messrs." %}</h3><strong>{{ o.cliente.ragione_sociale }}</strong><br>{{ o.cliente.indirizzo }}<br>{{ o.cliente.cap }} {{ o.cliente.comune }} {{ o.cliente.provincia }}{% if o.cliente.codice_paese != "IT" %} {{ o.cliente.paese }}{% endif %}{% if o.cliente.partita_iva %}<br>{% t "P. IVA" "VAT" %} {{ o.cliente.partita_iva }}{% endif %}</div></div>
+  <table><tr><th>{% t "Codice" "Code" %}</th><th>{% t "Descrizione" "Description" %}</th><th class="n">{% t "Quantità" "Quantity" %}</th><th class="n">{% t "Prezzo unitario" "Unit price" %}</th><th class="n">{% t "Importo" "Amount" %}</th></tr>
   {% for r in righe %}<tr><td>{{ r.prodotto.codice }}</td><td>{{ r.prodotto.nome }}{% if r.prodotto.formato %} · {{ r.prodotto.formato }}{% endif %}</td><td class="n">{{ r.quantita|intcomma }}</td><td class="n">{{ r.prezzo_unitario|prezzo }} €</td><td class="n">{{ r.totale|floatformat:"2g" }} €</td></tr>{% endfor %}
-  <tr class="tot"><td colspan="4">Totale imponibile (IVA esclusa)</td><td class="n">{{ o.totale|floatformat:"2g" }} €</td></tr></table>
-  <p style="margin-top:18px">Consegna prevista: <strong>{{ o.data_consegna_prevista|date:"d/m/Y"|default:"da definire" }}</strong></p>
+  <tr class="tot"><td colspan="4">{% t "Totale imponibile (IVA esclusa)" "Total (VAT excluded)" %}</td><td class="n">{{ o.totale|floatformat:"2g" }} €</td></tr></table>
+  <p style="margin-top:18px">{% t "Consegna prevista" "Expected delivery" %}: <strong>{% if o.data_consegna_prevista %}{{ o.data_consegna_prevista|date:"d/m/Y" }}{% else %}{% t "da definire" "to be confirmed" %}{% endif %}</strong></p>
   {% if o.note %}<p>{{ o.note|linebreaksbr }}</p>{% endif %}
-  <p class="small muted">Il packaging acquistato in eccedenza rispetto alla quantità prodotta resta di proprietà del cliente, in deposito presso il produttore, e viene fatturato separatamente.</p>
-  <div class="firma"><div>{{ NOME_AZIENDA }}</div><div>Per accettazione — {{ o.cliente.ragione_sociale }}</div></div>
+  <p class="small muted">{% t "Il packaging acquistato in eccedenza rispetto alla quantità prodotta resta di proprietà del cliente, in deposito presso il produttore, e viene fatturato separatamente." "Packaging purchased in excess of the quantity produced, to meet minimum order quantities, remains the customer's property, is stored at the manufacturer and is invoiced separately." %}</p>
+  <div class="firma"><div>{{ NOME_AZIENDA }}</div><div>{% t "Per accettazione" "Accepted by" %} — {{ o.cliente.ragione_sociale }}</div></div>
 </div>
 {% endblock %}

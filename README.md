@@ -137,6 +137,15 @@ Dall'ordine cliente si generano, già compilati e poi modificabili:
   accettata) più il packaging acquistato in eccedenza, da tenere in deposito.
   Sullo stesso ordine si annotano DDT e fattura ricevuti dal produttore.
 - **DDT** verso il cliente.
+- **Spedizione**: un pallet per riga (lotto, pezzi, cartoni, pesi, dimensioni,
+  numero UN), da cui escono il **packing list** e la **dichiarazione
+  multimodale delle merci pericolose**, compilata con i dati di pericolosità
+  del prodotto (UN, denominazione, classe, EmS, quantità limitata, imballi) e
+  con contatto d'emergenza e dichiarante di «Dati azienda». La dichiarazione
+  ha valore legale: va sempre controllata da chi la firma.
+- **Lingua**: ogni cliente ha la lingua dei documenti (italiano o inglese);
+  offerta, conferma d'ordine, DDT e pre-fattura escono in quella lingua, con
+  HS code e dicitura per le quantità limitate nelle note.
 - **PDF su carta intestata** per offerta, conferma d'ordine, ordine al
   produttore, DDT e pre-fattura: logo e piè di pagina si impostano in «Dati
   azienda».

@@ -14,7 +14,7 @@ _SVILUPPO = ["progetto", "evento", "quotazione", "rigaquotazione", "campionatura
 _ANAGRAFICA_CLIENTI = ["cliente", "contatto"]
 _TECNICO = ["formula", "versioneformula", "teststabilita", "componente", "artwork", "packaging", "prodotto", "rigadistinta"]
 _ORDINI = ["ordinecliente", "rigaordine"]
-_LOGISTICA = ["movimentopackaging", "ordineacquisto", "rigaacquisto", "ddt", "rigaddt"]
+_LOGISTICA = ["movimentopackaging", "ordineacquisto", "rigaacquisto", "ddt", "rigaddt", "spedizione", "collo"]
 _FATTURE = ["prefattura", "rigaprefattura"]
 
 RUOLI = {

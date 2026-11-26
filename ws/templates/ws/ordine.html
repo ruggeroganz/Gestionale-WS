@@ -8,9 +8,9 @@
 {% for a in avvisi %}<div class="alert bad"><strong>Attenzione, INCI non allineato:</strong> {{ a.prodotto.codice }} usa «{{ a.packaging.descrizione }}»{% if a.tipo == 'diverso' %} stampato con l'INCI di {{ a.stampata }}, ma la formula da produrre è {{ a.attuale }}{% else %} senza INCI di riferimento{% endif %}. <a href="{{ a.prodotto.get_absolute_url }}">Risolvi sul prodotto</a> prima di confermare.</div>{% endfor %}
 
 <div class="card"><div class="ch"><h2>Righe</h2><a class="btn sm" href="{% url 'nuovo' 'rigaordine' %}?ordine={{ o.pk }}">+ Riga</a></div>
-{% if righe %}<div class="tw"><table><tr><th>Prodotto</th><th>Formula</th><th class="n">Quantità</th><th class="n">Prezzo</th><th class="n">Totale</th><th></th></tr>
-{% for r in righe %}<tr><td><a href="{{ r.prodotto.get_absolute_url }}">{{ r.prodotto.codice }}</a> · {{ r.prodotto.nome }}</td><td>{{ r.prodotto.versione_formula|default:"—" }}</td><td class="n">{{ r.quantita|intcomma }}</td><td class="n">{{ r.prezzo_unitario|prezzo }} €</td><td class="n">{{ r.totale|floatformat:"2g" }} €</td><td class="act"><a href="{% url 'modifica' 'rigaordine' r.pk %}">modifica</a></td></tr>{% endfor %}
-<tr class="tot"><td colspan="4">Totale imponibile</td><td class="n">{{ o.totale|floatformat:"2g" }} €</td><td></td></tr></table></div>
+{% if righe %}<div class="tw"><table><tr><th>Prodotto</th><th>Formula</th><th>Lotto</th><th class="n">Quantità</th><th class="n">Prezzo</th><th class="n">Totale</th><th></th></tr>
+{% for r in righe %}<tr><td><a href="{{ r.prodotto.get_absolute_url }}">{{ r.prodotto.codice }}</a> · {{ r.prodotto.nome }}</td><td>{{ r.prodotto.versione_formula|default:"—" }}</td><td>{{ r.lotto|default:"—" }}</td><td class="n">{{ r.quantita|intcomma }}</td><td class="n">{{ r.prezzo_unitario|prezzo }} €</td><td class="n">{{ r.totale|floatformat:"2g" }} €</td><td class="act"><a href="{% url 'modifica' 'rigaordine' r.pk %}">modifica</a></td></tr>{% endfor %}
+<tr class="tot"><td colspan="5">Totale imponibile</td><td class="n">{{ o.totale|floatformat:"2g" }} €</td><td></td></tr></table></div>
 {% else %}<div class="empty">Aggiungi i prodotti ordinati.</div>{% endif %}</div>
 
 <div class="card"><div class="ch"><h2>Fabbisogno di packaging</h2><span class="muted small">distinta base × quantità, al netto della giacenza presso {{ o.produttore }}</span></div>
@@ -25,10 +25,12 @@
 <div class="card"><div class="ch"><h2>Documenti</h2><span class="actions">
   <form class="inline" method="post" action="{% url 'ordine_genera_acquisto' o.pk %}">{% csrf_token %}<button class="btn sm">+ Ordine al produttore</button></form>
   <form class="inline" method="post" action="{% url 'ordine_genera_ddt' o.pk %}">{% csrf_token %}<button class="btn sm">+ DDT</button></form>
+  <form class="inline" method="post" action="{% url 'ordine_genera_spedizione' o.pk %}">{% csrf_token %}<button class="btn sm">+ Spedizione</button></form>
   <form class="inline" method="post" action="{% url 'ordine_genera_prefattura' o.pk %}">{% csrf_token %}<button class="btn sm">+ Pre-fattura</button></form></span></div>
-{% if acquisti or ddt or prefatture %}<div class="tw"><table><tr><th>Documento</th><th>Data</th><th>Stato</th><th class="n">Importo</th></tr>
+{% if acquisti or ddt or prefatture or o.spedizioni.all %}<div class="tw"><table><tr><th>Documento</th><th>Data</th><th>Stato</th><th class="n">Importo</th></tr>
 {% for a in acquisti %}<tr><td><a href="{{ a.get_absolute_url }}">Ordine d'acquisto {{ a.numero }}</a><div class="small muted">a {{ a.produttore }}</div></td><td>{{ a.data|date:"d/m/Y" }}</td><td><span class="badge">{{ a.get_stato_display }}</span></td><td class="n">{{ a.totale|floatformat:"2g" }} €</td></tr>{% endfor %}
 {% for t in ddt %}<tr><td><a href="{{ t.get_absolute_url }}">DDT {{ t.numero }}</a></td><td>{{ t.data|date:"d/m/Y" }}</td><td></td><td></td></tr>{% endfor %}
+{% for sp in o.spedizioni.all %}<tr><td><a href="{{ sp.get_absolute_url }}">Spedizione {{ sp.numero }}</a><div class="small muted">packing list e dichiarazione merci pericolose</div></td><td>{{ sp.data|date:"d/m/Y" }}</td><td></td><td></td></tr>{% endfor %}
 {% for f in prefatture %}<tr><td><a href="{{ f.get_absolute_url }}">Pre-fattura {{ f.numero }}</a>{% if f.numero_fattura %}<div class="small muted">fattura n. {{ f.numero_fattura }}</div>{% endif %}</td><td>{{ f.data|date:"d/m/Y" }}</td><td><span class="badge {% if f.stato == 'registrata' %}ok{% elif f.stato == 'esportata' %}info{% endif %}">{{ f.get_stato_display }}</span></td><td class="n">{{ f.imponibile|floatformat:"2g" }} €</td></tr>{% endfor %}
 </table></div>{% else %}<div class="empty">Nessun documento. I pulsanti qui sopra li compilano a partire dalle righe dell'ordine e dal fabbisogno di packaging.</div>{% endif %}</div>
 {% if o.note %}<div class="card"><div class="ch"><h2>Note</h2></div><div class="cb">{{ o.note|linebreaksbr }}</div></div>{% endif %}

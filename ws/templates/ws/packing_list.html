@@ -1,0 +1,14 @@
+{% extends base_template %}
+{% load humanize %}
+{% block title %}Packing list {{ sp.numero }}{% endblock %}
+{% block content %}
+<div class="doc">
+  <h1>Packing list</h1><div class="muted">{{ sp.numero }} · {{ sp.data|date:"d/m/Y" }}{% if sp.riferimenti %} · {{ sp.riferimenti }}{% endif %}</div>
+  <div class="parti"><div><h3>Consignee</h3><strong>{{ sp.cliente.ragione_sociale }}</strong><br>{{ sp.destinazione }}</div>
+    <div><h3>Shipment</h3>{% if sp.nave_viaggio %}{{ sp.nave_viaggio }}<br>{% endif %}{% if sp.container %}{{ sp.container }}{% if sp.sigillo %} · Seal {{ sp.sigillo }}{% endif %}<br>{% endif %}{% if sp.porto_imbarco or sp.porto_sbarco %}{{ sp.porto_imbarco }} – {{ sp.porto_sbarco }}<br>{% endif %}{{ sp.resa }}{% if sp.vettore %} · {{ sp.vettore }}{% endif %}</div></div>
+  <table class="fitto"><tr><th>DG</th><th class="n">Pallet</th><th>Code</th><th>Description</th><th class="n">Q.ty pcs</th><th>Batch</th><th class="n">Gross kg</th><th class="n">Net kg</th><th>Plt dimensions</th><th class="n">Boxes</th></tr>
+  {% for c in sp.colli.all %}<tr><td>{{ c.un|default:"Not DNG" }}</td><td class="n">{{ c.numero }}</td><td>{{ c.prodotto.codice|default:"" }}</td><td>{{ c.descrizione }}</td><td class="n">{{ c.quantita|default:""|intcomma }}</td><td>{{ c.lotto }}</td><td class="n">{{ c.peso_lordo_kg|default:""|floatformat:"-2" }}</td><td class="n">{{ c.peso_netto_kg|default:""|floatformat:"-2" }}</td><td>{{ c.dimensioni }}</td><td class="n">{{ c.cartoni|default:"" }}</td></tr>{% endfor %}
+  {% with tot=sp.totali %}<tr class="tot"><td colspan="2">Total pallets: {{ tot.pallet }}</td><td colspan="2"></td><td class="n">{{ tot.pezzi|intcomma }}</td><td></td><td class="n">{{ tot.lordo|floatformat:"-2" }}</td><td class="n">{{ tot.netto|floatformat:"-2" }}</td><td></td><td class="n">{{ tot.cartoni|default:"" }}</td></tr>{% endwith %}</table>
+  {% if sp.note %}<p style="margin-top:10px">{{ sp.note|linebreaksbr }}</p>{% endif %}
+</div>
+{% endblock %}

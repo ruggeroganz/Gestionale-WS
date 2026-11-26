@@ -9,16 +9,16 @@
   <a class="btn" href="{% url 'pdf' 'ddt' d.pk %}">Scarica PDF</a>
 </div>
 <div class="doc">
-  <h1>Documento di trasporto {{ d.numero }}</h1><div class="muted">del {{ d.data|date:"d/m/Y" }}{% if d.ordine %} · Ns. ordine {{ d.ordine.numero }}{% if d.ordine.riferimento_cliente %} · Vs. riferimento {{ d.ordine.riferimento_cliente }}{% endif %}{% endif %}</div>
-  <div class="parti"><div><h3>Mittente</h3><strong>{{ azienda.ragione_sociale }}</strong><br>{{ azienda.indirizzo }}<br>{{ azienda.cap }} {{ azienda.comune }} {{ azienda.provincia }}{% if azienda.partita_iva %}<br>P. IVA {{ azienda.partita_iva }}{% endif %}
-      {% if d.luogo_partenza %}<p class="small" style="margin-top:8px">Partenza merce: {{ d.luogo_partenza }}</p>{% endif %}</div>
-    <div><h3>Destinatario</h3><strong>{{ d.cliente.ragione_sociale }}</strong>{% if d.cliente.partita_iva %}<br>P. IVA {{ d.cliente.partita_iva }}{% endif %}
-      <p class="small" style="margin-top:8px">Destinazione: {{ d.destinazione|default:"—" }}</p></div></div>
-  <table><tr><th>Codice</th><th>Descrizione</th><th>Lotto</th><th class="n">Quantità</th><th class="noprint"></th></tr>
-  {% for r in righe %}<tr><td>{{ r.codice }}</td><td>{{ r.descrizione }}</td><td>{{ r.lotto|default:"—" }}</td><td class="n">{{ r.quantita|intcomma }} pz</td><td class="act noprint"><a href="{% url 'modifica' 'rigaddt' r.pk %}">modifica</a></td></tr>{% endfor %}</table>
-  <dl class="dl" style="margin-top:20px"><dt>Causale</dt><dd>{{ d.causale }}</dd><dt>Vettore</dt><dd>{{ d.vettore|default:"—" }}</dd><dt>Porto</dt><dd>{{ d.porto|default:"—" }}</dd>
-    <dt>Colli</dt><dd>{{ d.colli|default:"—" }}</dd><dt>Peso</dt><dd>{% if d.peso_kg %}{{ d.peso_kg|floatformat:"-2" }} kg{% else %}—{% endif %}</dd><dt>Aspetto dei beni</dt><dd>{{ d.aspetto|default:"—" }}</dd></dl>
-  {% if d.note %}<p style="margin-top:12px">{{ d.note|linebreaksbr }}</p>{% endif %}
-  <div class="firma"><div>Firma del vettore</div><div>Firma del destinatario</div></div>
+  <h1>{% t "Documento di trasporto" "Transport document" %} {{ d.numero }}</h1><div class="muted">{% t "del" "dated" %} {{ d.data|date:"d/m/Y" }}{% if d.ordine %} · {% t "Ns. ordine" "Our order" %} {{ d.ordine.numero }}{% if d.ordine.riferimento_cliente %} · {% t "Vs. riferimento" "Your reference" %} {{ d.ordine.riferimento_cliente }}{% endif %}{% endif %}</div>
+  <div class="parti"><div><h3>{% t "Mittente" "Sender" %}</h3><strong>{{ azienda.ragione_sociale }}</strong><br>{{ azienda.indirizzo }}<br>{{ azienda.cap }} {{ azienda.comune }} {{ azienda.provincia }}{% if azienda.partita_iva %}<br>{% t "P. IVA" "VAT" %} {{ azienda.partita_iva }}{% endif %}
+      {% if d.luogo_partenza %}<p class="small" style="margin-top:8px">{% t "Partenza merce" "Goods collected at" %}: {{ d.luogo_partenza }}</p>{% endif %}</div>
+    <div><h3>{% t "Destinatario" "Messrs." %}</h3><strong>{{ d.cliente.ragione_sociale }}</strong><br>{{ d.cliente.indirizzo }}<br>{{ d.cliente.cap }} {{ d.cliente.comune }} {{ d.cliente.provincia }}{% if d.cliente.codice_paese != "IT" %} {{ d.cliente.paese }}{% endif %}{% if d.cliente.partita_iva %}<br>{% t "P. IVA" "VAT" %} {{ d.cliente.partita_iva }}{% endif %}
+      <p class="small" style="margin-top:8px">{% t "Destinazione" "Destination" %}: {{ d.destinazione|default:"—" }}</p></div></div>
+  <table><tr><th>{% t "Codice" "Code" %}</th><th>{% t "Descrizione" "Description" %}</th><th>{% t "Lotto" "Lot" %}</th><th class="n">{% t "Quantità" "Quantity" %}</th><th class="noprint"></th></tr>
+  {% for r in righe %}<tr><td>{{ r.codice }}</td><td>{{ r.descrizione }}</td><td>{{ r.lotto|default:"—" }}</td><td class="n">{{ r.quantita|intcomma }} {% t "pz" "pcs" %}</td><td class="act noprint"><a href="{% url 'modifica' 'rigaddt' r.pk %}">modifica</a></td></tr>{% endfor %}</table>
+  <dl class="dl" style="margin-top:20px"><dt>{% t "Causale" "Transaction reason" %}</dt><dd>{% if d.causale == "Vendita" %}{% t "Vendita" "Sale" %}{% else %}{{ d.causale }}{% endif %}</dd><dt>{% t "Vettore" "Transport by" %}</dt><dd>{{ d.vettore|default:"—" }}</dd><dt>{% t "Porto / resa" "Carriage" %}</dt><dd>{{ d.porto|default:"—" }}</dd>
+    <dt>{% t "Colli" "Parcels" %}</dt><dd>{{ d.colli|default:"—" }}</dd><dt>{% t "Peso lordo" "Gross weight" %}</dt><dd>{% if d.peso_kg %}{{ d.peso_kg|floatformat:"-2" }} kg{% else %}—{% endif %}</dd><dt>{% t "Peso netto" "Net weight" %}</dt><dd>{% if d.peso_netto_kg %}{{ d.peso_netto_kg|floatformat:"-2" }} kg{% else %}—{% endif %}</dd><dt>{% t "Aspetto dei beni" "Appearance of goods" %}</dt><dd>{{ d.aspetto|default:"—" }}</dd></dl>
+  {% if d.note %}<h3 style="margin-top:14px">{% t "Note" "Notes" %}</h3><p>{{ d.note|linebreaksbr }}</p>{% endif %}
+  <div class="firma"><div>{% t "Firma del vettore" "Signature of carrier or driver" %}</div><div>{% t "Firma del destinatario" "Signature of addressee" %}</div></div>
 </div>
 {% endblock %}

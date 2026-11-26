@@ -65,13 +65,13 @@ class Command(BaseCommand):
         if not User.objects.filter(username="admin").exists():
             User.objects.create_superuser("admin", password=PASSWORD)
 
-        Azienda.objects.create(ragione_sociale="WS Srl (demo)", partita_iva="00000000000", indirizzo="Via Demo 1", cap="20100", comune="Milano", provincia="MI", iban="IT00X0000000000000000000000")
+        Azienda.objects.create(ragione_sociale="WS Srl (demo)", partita_iva="00000000000", indirizzo="Via Demo 1", cap="20100", comune="Milano", provincia="MI", iban="IT00X0000000000000000000000", contatto_emergenza="Mario Rossi (demo)\n+39 000 0000000", dichiarante="Mario Rossi / CEO (demo)")
         bio = Produttore.objects.create(nome="Biopharma", paese="Italia", indirizzo="Zona industriale (indirizzo demo)", lead_time_giorni=150, note="Full service, produzione italiana.")
         cina = Produttore.objects.create(nome="Guangzhou Beauty Manufacturing", paese="Cina", lead_time_giorni=180, note="Full service, include trasporto via mare.")
 
         lum = Cliente.objects.create(ragione_sociale="Lumière Beauty Srl", tipo="brand", stato="attivo", paese="Italia", indirizzo="Via Esempio 12", cap="20121", comune="Milano", provincia="MI", codice_sdi="ABC1234", pagamento="Bonifico 30 gg d.f.f.m.", partita_iva="00000000001", commerciale=utenti["commerciale"])
         aur = Cliente.objects.create(ragione_sociale="Profumerie Aurora SpA", tipo="catena", stato="attivo", paese="Italia", indirizzo="Corso Demo 5", cap="40121", comune="Bologna", provincia="BO", pec="aurora@example.com", pagamento="Bonifico 60 gg d.f.f.m.", partita_iva="00000000002", commerciale=utenti["commerciale"])
-        nor = Cliente.objects.create(ragione_sociale="Nordic Glow AB", tipo="brand", stato="potenziale", paese="Svezia", codice_paese="SE", commerciale=utenti["commerciale"])
+        nor = Cliente.objects.create(ragione_sociale="Nordic Glow AB", tipo="brand", stato="potenziale", paese="Svezia", codice_paese="SE", lingua_documenti="en", commerciale=utenti["commerciale"])
         Contatto.objects.create(cliente=lum, nome="Sara Bianchi", ruolo="Product manager", email="sara@example.com")
         Contatto.objects.create(cliente=aur, nome="Luca Verdi", ruolo="Buyer private label", email="luca@example.com")
 
@@ -97,11 +97,11 @@ class Command(BaseCommand):
         k_bom = Packaging.objects.create(cliente=lum, componente=bombola, descrizione="Bombola 200 ml litografata Lumière", decorazione="litografia", colore="Bianco + Pantone 7421 C", artwork=a1, riporta_inci=True, moq=20000, costo_unitario=D("0.420"), prezzo_unitario=D("0.480"))
         k_cap = Packaging.objects.create(cliente=lum, componente=cap, descrizione="Cap Ø 45 Pantone 7421 C", decorazione="colore", colore="Pantone 7421 C", moq=30000, costo_unitario=D("0.060"), prezzo_unitario=D("0.072"))
         k_ero = Packaging.objects.create(cliente=lum, componente=erog, descrizione="Erogatore mousse bianco", decorazione="neutro", moq=10000, costo_unitario=D("0.110"), prezzo_unitario=D("0.130"))
-        sku1 = Prodotto.objects.create(codice="LUM-MOU-200", nome="Mousse volumizzante Lumière", cliente=lum, progetto=p1, versione_formula=f1v2, formato="200 ml")
+        sku1 = Prodotto.objects.create(codice="LUM-MOU-200", nome="Mousse volumizzante Lumière", cliente=lum, progetto=p1, versione_formula=f1v2, formato="200 ml", hs_code="33059000", pezzi_per_cartone=12, un_numero="UN 1950", un_denominazione="AEROSOL", un_classe="2.1", un_ems="F-D, S-U", quantita_limitata=True, imballo_interno="metal inners x 200 mL net each")
         for k in (k_bom, k_cap, k_ero):
             RigaDistinta.objects.create(prodotto=sku1, packaging=k)
         o1 = OrdineCliente.objects.create(cliente=lum, progetto=p1, produttore=bio, data=giorni(-195), data_consegna_prevista=giorni(-40), stato="consegnato", riferimento_cliente="PO-2291")
-        RigaOrdine.objects.create(ordine=o1, prodotto=sku1, quantita=5000, prezzo_unitario=D("2.750"))
+        RigaOrdine.objects.create(ordine=o1, prodotto=sku1, quantita=5000, prezzo_unitario=D("2.750"), lotto="L26-0417")
         flusso.registra_packaging(o1)
         MovimentoPackaging.objects.filter(ordine=o1).update(data=giorni(-45))
         oa = documenti.genera_ordine_acquisto(o1)
@@ -110,6 +110,13 @@ class Command(BaseCommand):
         ddt = documenti.genera_ddt(o1)
         ddt.data, ddt.vettore, ddt.colli, ddt.aspetto = giorni(-41), "Corriere demo", 14, "Cartoni su pallet"
         ddt.save()
+        sp = documenti.genera_spedizione(o1)
+        sp.data, sp.vettore, sp.nave_viaggio, sp.container, sp.sigillo, sp.porto_imbarco, sp.porto_sbarco = giorni(-41), "Spedizioniere demo", "MV Demo 001A", "40' box DEMO1234567", "000000", "Genova", "Demo Port"
+        sp.save()
+        sp.colli.all().delete()
+        for pezzi, lordo, netto, alt in ((1920, "387", "365", "117"), (1920, "387", "365", "117"), (1160, "236", "221", "85")):
+            sp.colli.create(prodotto=sku1, quantita=pezzi, lotto="L26-0417", cartoni=-(-pezzi // 12), peso_lordo_kg=D(lordo), peso_netto_kg=D(netto), dimensioni=f"120x80x{alt}")
+        sp.colli.create(descrizione="Materiale di packaging (non pericoloso)", peso_lordo_kg=D("150"), peso_netto_kg=D("130"), dimensioni="120x80x130")
         pf = documenti.genera_prefattura(o1)
         pf.data, pf.data_scadenza, pf.numero_fattura, pf.data_fattura, pf.stato = giorni(-40), giorni(3), "214/2026", giorni(-40), "registrata"
         pf.save()

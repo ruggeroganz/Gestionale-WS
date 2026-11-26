@@ -292,6 +292,11 @@ class PagineTest(TestCase):
         from .models import Brief
 
         urls += [b.get_absolute_url() for b in Brief.objects.all()]
+        from .models import Spedizione
+
+        urls.append(reverse("spedizioni"))
+        for sp in Spedizione.objects.all():
+            urls += [sp.get_absolute_url(), reverse("pdf", args=["packing", sp.pk]), reverse("pdf", args=["multimodale", sp.pk])]
         for modello in (OrdineAcquisto, DDT, PreFattura):
             urls += [d.get_absolute_url() for d in modello.objects.all()]
         for nome, (modello, _) in CRUD.items():
@@ -725,3 +730,75 @@ class BriefPagineTest(TestCase):
         self.client.post(b.get_absolute_url(), {"stato": "bozza"})
         b.refresh_from_db()
         self.assertEqual(b.valori, prima)
+
+
+class SpedizioneTest(DocumentiTest):
+    def setUp(self):
+        super().setUp()
+        p = self.prodotto
+        p.nome, p.formato, p.hs_code, p.pezzi_per_cartone = "Mousse", "150 mL", "33049900", 12
+        p.un_numero, p.un_denominazione, p.un_classe, p.un_ems, p.quantita_limitata = "UN 1950", "AEROSOL", "2.1", "F-D, S-U", True
+        p.imballo_interno = "metal inners x 150 mL net each"
+        p.save()
+        self.ordine.righe.update(lotto="260743")
+
+    def test_note_e_lotto_su_ddt_e_prefattura(self):
+        ddt = documenti.genera_ddt(self.ordine)
+        self.assertEqual(ddt.righe.get().lotto, "260743")
+        self.assertIn("HS CODE 33049900", ddt.note)
+        self.assertIn("DANGEROUS GOODS UN1950 SHIPPED UNDER ADR EXEMPTION FOR LIMITED QUANTITIES", ddt.note)
+        self.assertEqual(documenti.genera_prefattura(self.ordine).note, ddt.note)
+        self.prodotto.quantita_limitata = False
+        self.prodotto.save()
+        self.assertEqual(documenti.note_spedizione(self.ordine), "HS CODE 33049900")
+
+    def test_spedizione_dall_ordine_e_dichiarazione(self):
+        sp = documenti.genera_spedizione(self.ordine)
+        collo = sp.colli.get()
+        self.assertEqual((collo.descrizione, collo.un, collo.cartoni, collo.lotto, collo.numero), ("Mousse 150 mL", "UN1950", 417, "260743", 1))
+        collo.peso_lordo_kg, collo.peso_netto_kg = "500", "470"
+        collo.save()
+        sp.colli.create(prodotto=self.prodotto, quantita=100, cartoni=9, peso_lordo_kg="20.5", peso_netto_kg="18")
+        sp.colli.create(descrizione="Packaging material", peso_lordo_kg="150", peso_netto_kg="130")
+        sp.colli.create(descrizione="Bulk", un="UN3082", descrizione_adr="UN 3082, ENVIRONMENTALLY HAZARDOUS SUBSTANCE, LIQUID, N.O.S., 9, III", peso_lordo_kg="311", peso_netto_kg="302")
+        self.assertEqual([c.numero for c in sp.colli.all()], [1, 2, 3, 4])
+        tot = sp.totali
+        self.assertEqual((tot["pallet"], str(tot["lordo"]), str(tot["netto"]), tot["cartoni"]), (4, "981.50", "920.00", 426))
+        aerosol, bulk = sp.merci_pericolose()  # il materiale non pericoloso resta fuori dalla dichiarazione
+        self.assertEqual((aerosol["prodotto"], aerosol["cartoni"], str(aerosol["lordo"]), aerosol["pallet"]), (self.prodotto, 426, "520.50", 2))
+        self.assertEqual((bulk["prodotto"], str(bulk["netto"])), (None, "302.00"))
+
+        self.client.force_login(get_user_model().objects.create_user("y", password="y"))
+        r = self.client.get(sp.get_absolute_url())
+        self.assertContains(r, "contatto d&#x27;emergenza 24h")  # dati mancanti segnalati
+        for tipo in ("packing", "multimodale"):
+            r = self.client.get(reverse("pdf", args=[tipo, sp.pk]))
+            self.assertTrue(r.content.startswith(b"%PDF"))
+
+    def test_contenuto_della_dichiarazione(self):
+        from django.template.loader import render_to_string
+
+        sp = documenti.genera_spedizione(self.ordine)
+        sp.colli.update(peso_lordo_kg="994", peso_netto_kg="925")
+        html = render_to_string("ws/multimodale.html", {"sp": sp, "azienda": Azienda.corrente(), "pericolose": sp.merci_pericolose()})
+        for atteso in ("UN 1950, AEROSOL, 2.1", "EmS: F-D, S-U", "Limited Quantity", "417 fibreboard boxes each containing", "12 metal inners x 150 mL net each", "994,00", "MULTIMODAL DANGEROUS GOODS FORM"):
+            self.assertIn(atteso, html)
+
+    def test_documenti_in_inglese_per_il_cliente_estero(self):
+        from django.test import RequestFactory
+
+        from .views import _html_pdf
+
+        ddt = documenti.genera_ddt(self.ordine)
+        italiano = _html_pdf(RequestFactory().get("/"), "ws/ddt.html", "d", ddt, Azienda.corrente(), None)
+        self.assertIn("Documento di trasporto", italiano)
+        self.cliente.lingua_documenti = "en"
+        self.cliente.save()
+        ddt.refresh_from_db()
+        inglese = _html_pdf(RequestFactory().get("/"), "ws/ddt.html", "d", ddt, Azienda.corrente(), None)
+        for atteso in ("Transport document", "Messrs.", "Gross weight", "Signature of addressee", "5.000"):
+            self.assertIn(atteso, inglese)
+        self.assertNotIn("Documento di trasporto", inglese)
+        self.client.force_login(get_user_model().objects.create_user("z", password="z"))
+        pf = documenti.genera_prefattura(self.ordine)
+        self.assertTrue(self.client.get(reverse("pdf", args=["prefattura", pf.pk])).content.startswith(b"%PDF"))

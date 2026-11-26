@@ -60,6 +60,9 @@ class Cliente(models.Model):
     codice_sdi = models.CharField("codice destinatario SDI", max_length=7, blank=True)
     pec = models.EmailField("PEC", blank=True)
     pagamento = models.CharField("condizioni di pagamento", max_length=120, blank=True, help_text="Es. Bonifico 30 gg d.f.f.m.")
+    lingua_documenti = models.CharField(
+        "lingua dei documenti", max_length=2, choices=[("it", "Italiano"), ("en", "Inglese")], default="it"
+    )
     email = models.EmailField(blank=True)
     telefono = models.CharField(max_length=40, blank=True)
     commerciale = models.ForeignKey(
@@ -683,6 +686,18 @@ class Prodotto(models.Model):
         help_text="Versione che verrà usata alla prossima produzione.",
     )
     formato = models.CharField(max_length=80, blank=True, help_text="Es. 200 ml.")
+    hs_code = models.CharField("HS code", max_length=20, blank=True, help_text="Voce doganale, es. 33049900.")
+    pezzi_per_cartone = models.PositiveIntegerField(null=True, blank=True)
+    un_numero = models.CharField(
+        "numero UN", max_length=10, blank=True, help_text="Solo per merci pericolose, es. UN 1950. Vuoto se non pericoloso."
+    )
+    un_denominazione = models.CharField("denominazione di trasporto", max_length=200, blank=True, help_text="Proper shipping name, es. AEROSOL.")
+    un_classe = models.CharField("classe di pericolo", max_length=20, blank=True, help_text="Es. 2.1; aggiungere il gruppo d'imballaggio se previsto (9, III).")
+    un_ems = models.CharField("EmS", max_length=20, blank=True, help_text="Es. F-D, S-U.")
+    quantita_limitata = models.BooleanField("spedito in quantità limitata (LQ)", default=False)
+    imballo_interno = models.CharField(
+        "imballo interno", max_length=120, blank=True, help_text="In inglese, es. metal inners x 150 mL net each."
+    )
     prossima_consegna = models.DateField(
         "prossima consegna prevista",
         null=True,
@@ -773,6 +788,7 @@ class RigaOrdine(models.Model):
     prodotto = models.ForeignKey(Prodotto, on_delete=models.PROTECT, related_name="righe_ordine")
     quantita = models.PositiveIntegerField("quantità")
     prezzo_unitario = models.DecimalField("prezzo unitario (€)", max_digits=12, decimal_places=4, default=0)
+    lotto = models.CharField("lotto di produzione", max_length=60, blank=True)
 
     class Meta:
         ordering = ["pk"]
@@ -859,6 +875,12 @@ class Azienda(models.Model):
     telefono = models.CharField(max_length=40, blank=True)
     logo = models.FileField(
         "logo per la carta intestata", upload_to="azienda/", blank=True, help_text="Immagine PNG, JPG o SVG."
+    )
+    contatto_emergenza = models.TextField(
+        "contatto d'emergenza 24h", blank=True, help_text="Per la dichiarazione merci pericolose: nome, telefoni, email."
+    )
+    dichiarante = models.CharField(
+        "dichiarante merci pericolose", max_length=120, blank=True, help_text="Nome e qualifica, es. Mario Rossi / CEO."
     )
     piede_documenti = models.TextField(
         "piè di pagina dei documenti", blank=True,
@@ -979,7 +1001,8 @@ class DDT(models.Model):
     vettore = models.CharField(max_length=120, blank=True)
     porto = models.CharField(max_length=40, blank=True, help_text="Es. franco, assegnato.")
     colli = models.PositiveIntegerField(null=True, blank=True)
-    peso_kg = models.DecimalField("peso (kg)", max_digits=10, decimal_places=2, null=True, blank=True)
+    peso_kg = models.DecimalField("peso lordo (kg)", max_digits=10, decimal_places=2, null=True, blank=True)
+    peso_netto_kg = models.DecimalField("peso netto (kg)", max_digits=10, decimal_places=2, null=True, blank=True)
     aspetto = models.CharField("aspetto esteriore dei beni", max_length=80, blank=True, help_text="Es. cartoni su pallet.")
     note = models.TextField(blank=True)
 
@@ -1222,3 +1245,106 @@ class Brief(models.Model):
 
     def get_absolute_url(self):
         return reverse("brief", args=[self.pk])
+
+
+# --------------------------------------------------------------------------
+# Spedizioni: packing list e dichiarazione multimodale merci pericolose
+# --------------------------------------------------------------------------
+class Spedizione(models.Model):
+    numero = models.CharField(max_length=20, unique=True, blank=True)
+    cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT, related_name="spedizioni")
+    ordine = models.ForeignKey(
+        OrdineCliente, null=True, blank=True, on_delete=models.SET_NULL, related_name="spedizioni", verbose_name="ordine cliente"
+    )
+    data = models.DateField(default=oggi)
+    riferimenti = models.CharField("riferimenti (fatture, DDT)", max_length=250, blank=True, help_text="Es. Invoices n. 1 dated 24/06/2026.")
+    resa = models.CharField("resa (Incoterm)", max_length=40, default="EXW")
+    vettore = models.CharField("vettore / spedizioniere", max_length=120, blank=True)
+    nave_viaggio = models.CharField("nave e viaggio / volo", max_length=120, blank=True)
+    container = models.CharField("container (tipo, numero, tara)", max_length=120, blank=True)
+    sigillo = models.CharField(max_length=60, blank=True)
+    porto_imbarco = models.CharField("porto / luogo d'imbarco", max_length=120, blank=True)
+    porto_sbarco = models.CharField("porto / luogo di sbarco", max_length=120, blank=True)
+    destinazione = models.CharField(max_length=200, blank=True)
+    note = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-data", "-pk"]
+        verbose_name = "spedizione"
+        verbose_name_plural = "spedizioni"
+
+    def __str__(self):
+        return self.numero
+
+    def save(self, *args, **kwargs):
+        if not self.numero:
+            self.numero = _prossimo_codice(Spedizione, "SP", "numero")
+        super().save(*args, **kwargs)
+
+    def get_absolute_url(self):
+        return reverse("spedizione", args=[self.pk])
+
+    @property
+    def totali(self):
+        colli = list(self.colli.all())
+        return {
+            "pallet": len(colli),
+            "lordo": sum((c.peso_lordo_kg or 0 for c in colli), Decimal("0")),
+            "netto": sum((c.peso_netto_kg or 0 for c in colli), Decimal("0")),
+            "pezzi": sum(c.quantita or 0 for c in colli),
+            "cartoni": sum(c.cartoni or 0 for c in colli),
+        }
+
+    def merci_pericolose(self):
+        """Righe della dichiarazione multimodale: una per merce pericolosa, con colli e masse sommati."""
+        gruppi = {}
+        for c in self.colli.select_related("prodotto"):
+            if not c.un:
+                continue
+            chiave = c.prodotto_id or c.descrizione
+            g = gruppi.setdefault(chiave, {"collo": c, "prodotto": c.prodotto, "lordo": Decimal("0"), "netto": Decimal("0"), "cartoni": 0, "pallet": 0})
+            g["lordo"] += c.peso_lordo_kg or 0
+            g["netto"] += c.peso_netto_kg or 0
+            g["cartoni"] += c.cartoni or 0
+            g["pallet"] += 1
+        return list(gruppi.values())
+
+
+class Collo(models.Model):
+    """Un pallet (o collo) della spedizione."""
+
+    spedizione = models.ForeignKey(Spedizione, on_delete=models.CASCADE, related_name="colli")
+    numero = models.PositiveIntegerField("pallet n.", editable=False)
+    prodotto = models.ForeignKey(Prodotto, null=True, blank=True, on_delete=models.PROTECT, related_name="colli")
+    descrizione = models.CharField(max_length=200, blank=True, help_text="Compilata dal prodotto se lasciata vuota.")
+    quantita = models.PositiveIntegerField("quantità (pezzi)", null=True, blank=True)
+    lotto = models.CharField(max_length=60, blank=True)
+    cartoni = models.PositiveIntegerField("numero di cartoni", null=True, blank=True)
+    peso_lordo_kg = models.DecimalField("peso lordo (kg)", max_digits=10, decimal_places=2, null=True, blank=True)
+    peso_netto_kg = models.DecimalField("peso netto (kg)", max_digits=10, decimal_places=2, null=True, blank=True)
+    dimensioni = models.CharField("dimensioni pallet (cm)", max_length=40, blank=True, help_text="Es. 120x80x117.")
+    un = models.CharField("numero UN", max_length=10, blank=True, help_text="Vuoto se non pericoloso; preso dal prodotto se lasciato vuoto.")
+    descrizione_adr = models.TextField(
+        "descrizione per la dichiarazione merci pericolose",
+        blank=True,
+        help_text="Solo per merci senza scheda prodotto (es. bulk): UN, denominazione, classe, EmS, imballi. In inglese.",
+    )
+
+    class Meta:
+        ordering = ["spedizione", "numero"]
+        verbose_name = "pallet"
+        verbose_name_plural = "pallet"
+
+    def __str__(self):
+        return f"{self.spedizione.numero} · pallet {self.numero}"
+
+    def save(self, *args, **kwargs):
+        if not self.numero:
+            self.numero = _prossimo_numero(Collo.objects.filter(spedizione=self.spedizione))
+        if self.prodotto_id:
+            self.descrizione = self.descrizione or " ".join(x for x in (self.prodotto.nome, self.prodotto.formato) if x)
+            self.un = self.un or self.prodotto.un_numero.replace(" ", "")
+        super().save(*args, **kwargs)
+
+    def get_absolute_url(self):
+        return self.spedizione.get_absolute_url()
