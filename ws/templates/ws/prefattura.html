@@ -1,0 +1,28 @@
+{% extends "ws/base.html" %}
+{% load humanize %}
+{% block title %}Pre-fattura {{ d.numero }}{% endblock %}
+{% block content %}
+<div class="actions noprint" style="margin-bottom:14px">
+  {% if d.ordine %}<a class="btn sec" href="{{ d.ordine.get_absolute_url }}">← Ordine {{ d.ordine.numero }}</a>{% endif %}
+  <a class="btn sec" href="{% url 'modifica' 'prefattura' d.pk %}">Modifica / IVA / numero definitivo</a>
+  <a class="btn sec" href="{% url 'nuovo' 'rigaprefattura' %}?prefattura={{ d.pk }}">+ Riga</a>
+  <a class="btn" href="{% url 'prefattura_esporta' d.pk 'xml' %}">Scarica XML (FatturaPA)</a>
+  <a class="btn sec" href="{% url 'prefattura_esporta' d.pk 'csv' %}">Scarica CSV</a>
+  <button class="btn sec" onclick="window.print()">Stampa</button>
+  <span class="badge {% if d.stato == 'registrata' %}ok{% elif d.stato == 'esportata' %}info{% endif %}">{{ d.get_stato_display }}</span>
+</div>
+{% if controlli %}<div class="alert noprint"><strong>Da completare prima dell'importazione:</strong><ul style="margin:4px 0 0;padding-left:18px">{% for c in controlli %}<li>{{ c }}</li>{% endfor %}</ul></div>{% endif %}
+{% if d.numero_fattura %}<div class="alert ok noprint">Registrata in contabilità come fattura n. {{ d.numero_fattura }}{% if d.data_fattura %} del {{ d.data_fattura|date:"d/m/Y" }}{% endif %}.</div>{% endif %}
+<div class="doc">
+  <h1>Pre-fattura {{ d.numero }}</h1><div class="muted">del {{ d.data|date:"d/m/Y" }} · documento non valido ai fini fiscali{% if d.ordine %} · Ns. ordine {{ d.ordine.numero }}{% if d.ordine.riferimento_cliente %} · Vs. riferimento {{ d.ordine.riferimento_cliente }}{% endif %}{% endif %}{% if d.ddt %} · DDT {{ d.ddt.numero }} del {{ d.ddt.data|date:"d/m/Y" }}{% endif %}</div>
+  <div class="parti"><div><h3>Emittente</h3><strong>{{ azienda.ragione_sociale }}</strong><br>{{ azienda.indirizzo }}<br>{{ azienda.cap }} {{ azienda.comune }} {{ azienda.provincia }}{% if azienda.partita_iva %}<br>P. IVA {{ azienda.partita_iva }}{% endif %}</div>
+    <div><h3>Cliente</h3><strong>{{ d.cliente.ragione_sociale }}</strong><br>{{ d.cliente.indirizzo }}<br>{{ d.cliente.cap }} {{ d.cliente.comune }} {{ d.cliente.provincia }} {{ d.cliente.codice_paese }}{% if d.cliente.partita_iva %}<br>P. IVA {{ d.cliente.partita_iva }}{% endif %}{% if d.cliente.codice_sdi %}<br>Codice SDI {{ d.cliente.codice_sdi }}{% endif %}</div></div>
+  <table><tr><th>Codice</th><th>Descrizione</th><th class="n">Quantità</th><th class="n">Prezzo</th><th class="n">Importo</th><th class="noprint"></th></tr>
+  {% for r in righe %}<tr><td>{{ r.codice }}</td><td>{{ r.descrizione }}<div class="small muted">{{ r.get_tipo_display }}</div></td><td class="n">{{ r.quantita|intcomma }}</td><td class="n">{{ r.prezzo_unitario|floatformat:3 }} €</td><td class="n">{{ r.totale|floatformat:"2g" }} €</td><td class="act noprint"><a href="{% url 'modifica' 'rigaprefattura' r.pk %}">modifica</a></td></tr>{% endfor %}
+  <tr class="tot"><td colspan="4">Imponibile</td><td class="n">{{ d.imponibile|floatformat:"2g" }} €</td><td class="noprint"></td></tr>
+  <tr><td colspan="4">IVA {{ d.aliquota_iva|floatformat:"-2" }}%{% if d.natura %} · {{ d.get_natura_display }}{% endif %}</td><td class="n">{{ d.imposta|floatformat:"2g" }} €</td><td class="noprint"></td></tr>
+  <tr class="tot"><td colspan="4">Totale documento</td><td class="n">{{ d.totale|floatformat:"2g" }} €</td><td class="noprint"></td></tr></table>
+  <p style="margin-top:16px">Pagamento: {{ d.pagamento|default:"—" }}{% if d.data_scadenza %} · scadenza {{ d.data_scadenza|date:"d/m/Y" }}{% endif %}{% if azienda.iban %} · IBAN {{ azienda.iban }}{% endif %}</p>
+  {% if d.note %}<p>{{ d.note|linebreaksbr }}</p>{% endif %}
+</div>
+{% endblock %}

@@ -375,6 +375,41 @@ def fabbisogno(ordine):
     return out
 
 
+def piano_packaging(ordine):
+    """Come fabbisogno(), ma se i movimenti sono già registrati ricostruisce la situazione di allora."""
+    movimenti = list(ordine.movimenti.select_related("packaging"))
+    if not movimenti:
+        return fabbisogno(ordine)
+    primo = min(m.pk for m in movimenti)
+    per_packaging = {}
+    for m in movimenti:
+        d = per_packaging.setdefault(m.packaging, {"carico": 0, "consumo": 0})
+        if m.tipo == MovimentoPackaging.Tipo.CARICO:
+            d["carico"] += m.quantita
+        elif m.tipo == MovimentoPackaging.Tipo.CONSUMO:
+            d["consumo"] -= m.quantita
+    out = []
+    for p, d in per_packaging.items():
+        prima = (
+            MovimentoPackaging.objects.filter(packaging=p, produttore=ordine.produttore, pk__lt=primo).aggregate(
+                q=Sum("quantita")
+            )["q"]
+            or 0
+        )
+        out.append(
+            {
+                "packaging": p,
+                "necessari": d["consumo"],
+                "giacenza": prima,
+                "mancante": max(0, d["consumo"] - prima),
+                "da_ordinare": d["carico"],
+                "residuo": prima + d["carico"] - d["consumo"],
+            }
+        )
+    out.sort(key=lambda r: r["packaging"].codice)
+    return out
+
+
 @transaction.atomic
 def registra_packaging(ordine):
     """Carica il packaging acquistato dal produttore e scarica quello consumato dall'ordine."""

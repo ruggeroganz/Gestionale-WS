@@ -1,0 +1,11 @@
+{% extends "ws/base.html" %}
+{% block title %}Ordini ai produttori{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Ordini ai produttori</h1><div class="sub">Si generano dall'ordine cliente: prodotto finito più packaging da tenere in deposito.</div></div><div class="actions"><a class="btn sec" href="{% url 'nuovo' 'acquisto' %}">+ Ordine manuale</a></div></div>
+<div class="card"><div class="tw"><table><tr><th>Ordine</th><th>Data</th><th>Produttore</th><th>Ordine cliente</th><th>Stato</th><th>Fattura produttore</th><th class="n">Totale</th></tr>
+{% for a in acquisti %}<tr><td><a href="{{ a.get_absolute_url }}">{{ a.numero }}</a></td><td>{{ a.data|date:"d/m/Y" }}</td><td>{{ a.produttore }}</td>
+  <td>{% if a.ordine %}<a href="{{ a.ordine.get_absolute_url }}">{{ a.ordine.numero }}</a> · {{ a.ordine.cliente }}{% else %}—{% endif %}</td>
+  <td><span class="badge {% if a.stato == 'ricevuto' %}ok{% elif a.stato == 'annullato' %}bad{% elif a.stato != 'bozza' %}info{% endif %}">{{ a.get_stato_display }}</span></td>
+  <td class="small">{{ a.fattura_fornitore|default:"—" }}{% if a.importo_fattura_fornitore %}<br>{{ a.importo_fattura_fornitore|floatformat:"2g" }} €{% endif %}</td><td class="n">{{ a.totale|floatformat:"2g" }} €</td></tr>
+{% empty %}<tr><td colspan="7" class="muted">Nessun ordine d'acquisto.</td></tr>{% endfor %}</table></div></div>
+{% endblock %}

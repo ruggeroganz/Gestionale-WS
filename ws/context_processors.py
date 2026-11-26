@@ -1,5 +1,5 @@
-from django.conf import settings
+from .models import Azienda
 
 
 def azienda(request):
-    return {"NOME_AZIENDA": settings.NOME_AZIENDA}
+    return {"NOME_AZIENDA": Azienda.corrente().ragione_sociale}

@@ -1,0 +1,8 @@
+{% extends "ws/base.html" %}
+{% block title %}DDT{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Documenti di trasporto</h1><div class="sub">Si generano dall'ordine cliente.</div></div><div class="actions"><a class="btn sec" href="{% url 'nuovo' 'ddt' %}">+ DDT manuale</a></div></div>
+<div class="card"><div class="tw"><table><tr><th>DDT</th><th>Data</th><th>Cliente</th><th>Ordine</th><th>Destinazione</th><th>Vettore</th></tr>
+{% for t in ddt %}<tr><td><a href="{{ t.get_absolute_url }}">{{ t.numero }}</a></td><td>{{ t.data|date:"d/m/Y" }}</td><td>{{ t.cliente }}</td><td>{% if t.ordine %}<a href="{{ t.ordine.get_absolute_url }}">{{ t.ordine.numero }}</a>{% else %}—{% endif %}</td><td class="small">{{ t.destinazione }}</td><td>{{ t.vettore|default:"—" }}</td></tr>
+{% empty %}<tr><td colspan="6" class="muted">Nessun DDT.</td></tr>{% endfor %}</table></div></div>
+{% endblock %}

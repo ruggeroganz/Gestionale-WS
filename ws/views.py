@@ -8,9 +8,12 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
-from . import flusso
+from . import documenti, flusso
+from .ruoli import puo
 from .models import (
+    DDT,
     Artwork,
+    Azienda,
     Campionatura,
     Cliente,
     Componente,
@@ -18,14 +21,19 @@ from .models import (
     Evento,
     Formula,
     MovimentoPackaging,
+    OrdineAcquisto,
     OrdineCliente,
     Packaging,
+    PreFattura,
     Prodotto,
     Produttore,
     Progetto,
     Quotazione,
+    RigaAcquisto,
+    RigaDDT,
     RigaDistinta,
     RigaOrdine,
+    RigaPreFattura,
     RigaQuotazione,
     TestStabilita,
     VersioneFormula,
@@ -33,9 +41,9 @@ from .models import (
 
 # Modelli modificabili dall'interfaccia con il form generico: nome -> (modello, campi)
 CRUD = {
-    "cliente": (Cliente, ["ragione_sociale", "tipo", "stato", "partita_iva", "paese", "indirizzo", "email", "telefono", "commerciale", "note"]),
+    "cliente": (Cliente, ["ragione_sociale", "tipo", "stato", "partita_iva", "codice_fiscale", "indirizzo", "cap", "comune", "provincia", "codice_paese", "paese", "codice_sdi", "pec", "pagamento", "email", "telefono", "commerciale", "note"]),
     "contatto": (Contatto, ["cliente", "nome", "ruolo", "email", "telefono"]),
-    "produttore": (Produttore, ["nome", "paese", "lead_time_giorni", "email", "telefono", "note"]),
+    "produttore": (Produttore, ["nome", "paese", "indirizzo", "partita_iva", "lead_time_giorni", "email", "telefono", "note"]),
     "progetto": (Progetto, ["nome", "cliente", "produttore", "tipo_prodotto", "responsabile", "quantita_prevista", "prezzo_target", "data_consegna_richiesta", "stato", "brief"]),
     "formula": (Formula, ["codice", "nome", "produttore", "progetto", "categoria"]),
     "versioneformula": (VersioneFormula, ["formula", "inci", "modifiche", "data"]),
@@ -45,12 +53,19 @@ CRUD = {
     "rigaquotazione": (RigaQuotazione, ["quotazione", "tipo", "descrizione", "quantita", "costo_unitario", "prezzo_unitario"]),
     "componente": (Componente, ["codice", "tipo", "descrizione", "materiale", "formato", "note"]),
     "artwork": (Artwork, ["cliente", "progetto", "nome", "versione_formula", "stato", "file", "data_approvazione", "note"]),
-    "packaging": (Packaging, ["cliente", "componente", "descrizione", "decorazione", "colore", "artwork", "riporta_inci", "moq", "note"]),
+    "packaging": (Packaging, ["cliente", "componente", "descrizione", "decorazione", "colore", "artwork", "riporta_inci", "moq", "costo_unitario", "prezzo_unitario", "note"]),
     "prodotto": (Prodotto, ["codice", "nome", "cliente", "progetto", "versione_formula", "formato", "attivo"]),
     "rigadistinta": (RigaDistinta, ["prodotto", "packaging", "quantita_per_pezzo", "etichetta_correttiva"]),
     "movimento": (MovimentoPackaging, ["packaging", "produttore", "data", "tipo", "quantita", "note"]),
     "ordine": (OrdineCliente, ["cliente", "progetto", "produttore", "data", "data_consegna_prevista", "stato", "riferimento_cliente", "note"]),
     "rigaordine": (RigaOrdine, ["ordine", "prodotto", "quantita", "prezzo_unitario"]),
+    "azienda": (Azienda, ["ragione_sociale", "partita_iva", "codice_fiscale", "regime_fiscale", "indirizzo", "cap", "comune", "provincia", "codice_paese", "iban", "email", "telefono"]),
+    "acquisto": (OrdineAcquisto, ["produttore", "ordine", "data", "data_consegna_richiesta", "stato", "ddt_fornitore", "fattura_fornitore", "importo_fattura_fornitore", "note"]),
+    "rigaacquisto": (RigaAcquisto, ["ordine_acquisto", "tipo", "descrizione", "quantita", "costo_unitario"]),
+    "ddt": (DDT, ["cliente", "ordine", "data", "luogo_partenza", "destinazione", "causale", "vettore", "porto", "colli", "peso_kg", "aspetto", "note"]),
+    "rigaddt": (RigaDDT, ["ddt", "codice", "descrizione", "quantita", "lotto"]),
+    "prefattura": (PreFattura, ["cliente", "ordine", "ddt", "data", "aliquota_iva", "natura", "pagamento", "data_scadenza", "stato", "numero_fattura", "data_fattura", "note"]),
+    "rigaprefattura": (RigaPreFattura, ["prefattura", "tipo", "codice", "descrizione", "quantita", "prezzo_unitario"]),
 }
 
 
@@ -59,6 +74,28 @@ def _next(request, default):
     if url and url_has_allowed_host_and_scheme(url, allowed_hosts={request.get_host()}):
         return url
     return default
+
+
+def _negato(request, default="/"):
+    messages.error(request, "Il tuo ruolo non permette questa operazione. Chiedi a un amministratore se ti serve.")
+    return redirect(_next(request, request.META.get("HTTP_REFERER") or default))
+
+
+def richiede(azione, modello):
+    """Decoratore: l'utente deve avere il permesso indicato sul modello."""
+    from functools import wraps
+
+    def decoratore(vista):
+        @wraps(vista)
+        @login_required
+        def interna(request, *args, **kwargs):
+            if not puo(request.user, azione, modello):
+                return _negato(request)
+            return vista(request, *args, **kwargs)
+
+        return interna
+
+    return decoratore
 
 
 def _campo_form(campo, **kwargs):
@@ -120,6 +157,8 @@ def modifica(request, modello, pk=None):
         raise Http404
     Model, campi = CRUD[modello]
     obj = get_object_or_404(Model, pk=pk) if pk else None
+    if not puo(request.user, "change" if obj else "add", Model):
+        return _negato(request, obj.get_absolute_url() if obj else "/")
     iniziali = {k: v for k, v in request.GET.items() if k in campi}
     Form = modelform_factory(Model, fields=campi, formfield_callback=_campo_form)
     form = Form(request.POST or None, request.FILES or None, instance=obj, initial=iniziali)
@@ -152,6 +191,8 @@ def elimina(request, modello, pk):
     if modello not in CRUD:
         raise Http404
     obj = get_object_or_404(CRUD[modello][0], pk=pk)
+    if not puo(request.user, "delete", CRUD[modello][0]):
+        return _negato(request)
     try:
         obj.delete()
         messages.success(request, "Eliminato.")
@@ -245,7 +286,7 @@ def progetto(request, pk):
     )
 
 
-@login_required
+@richiede("change", Progetto)
 @require_POST
 def progetto_avanza(request, pk):
     p = get_object_or_404(Progetto, pk=pk)
@@ -257,7 +298,7 @@ def progetto_avanza(request, pk):
     return redirect(p)
 
 
-@login_required
+@richiede("change", Progetto)
 @require_POST
 def progetto_arretra(request, pk):
     p = get_object_or_404(Progetto, pk=pk)
@@ -269,7 +310,7 @@ def progetto_arretra(request, pk):
     return redirect(p)
 
 
-@login_required
+@richiede("add", Evento)
 @require_POST
 def progetto_nota(request, pk):
     p = get_object_or_404(Progetto, pk=pk)
@@ -400,7 +441,8 @@ def ordine(request, pk):
     o = _ordine(pk)
     righe = list(o.righe.select_related("prodotto__versione_formula__formula"))
     avvisi = []
-    for r in righe:
+    da_produrre = o.stato in (OrdineCliente.Stato.BOZZA, OrdineCliente.Stato.INVIATA, OrdineCliente.Stato.ACCETTATA)
+    for r in righe if da_produrre else []:
         for a in flusso.avvisi_inci(r.prodotto):
             if not a["risolto"]:
                 a["prodotto"] = r.prodotto
@@ -411,9 +453,12 @@ def ordine(request, pk):
         {
             "o": o,
             "righe": righe,
-            "fabbisogno": flusso.fabbisogno(o),
-            "movimenti": o.movimenti.select_related("packaging"),
+            "fabbisogno": flusso.piano_packaging(o),
+            "registrato": o.movimenti.exists(),
             "avvisi": avvisi,
+            "acquisti": o.ordini_acquisto.prefetch_related("righe"),
+            "ddt": o.ddt.all(),
+            "prefatture": o.prefatture.prefetch_related("righe"),
         },
     )
 
@@ -424,7 +469,7 @@ def ordine_stampa(request, pk):
     return render(request, "ws/ordine_stampa.html", {"o": o, "righe": o.righe.select_related("prodotto")})
 
 
-@login_required
+@richiede("add", MovimentoPackaging)
 @require_POST
 def ordine_registra_packaging(request, pk):
     o = _ordine(pk)
@@ -434,3 +479,101 @@ def ordine_registra_packaging(request, pk):
     except flusso.FlussoError as e:
         messages.error(request, str(e))
     return redirect(o)
+
+
+# --------------------------------------------------------------------------
+# Documenti
+# --------------------------------------------------------------------------
+def _genera(request, pk, funzione):
+    o = _ordine(pk)
+    try:
+        doc = funzione(o)
+    except flusso.FlussoError as e:
+        messages.error(request, str(e))
+        return redirect(o)
+    messages.success(request, f"Creato {doc._meta.verbose_name} {doc}. Controlla i dati prima di inviarlo.")
+    return redirect(doc)
+
+
+@richiede("add", OrdineAcquisto)
+@require_POST
+def ordine_genera_acquisto(request, pk):
+    return _genera(request, pk, documenti.genera_ordine_acquisto)
+
+
+@richiede("add", DDT)
+@require_POST
+def ordine_genera_ddt(request, pk):
+    return _genera(request, pk, documenti.genera_ddt)
+
+
+@richiede("add", PreFattura)
+@require_POST
+def ordine_genera_prefattura(request, pk):
+    return _genera(request, pk, documenti.genera_prefattura)
+
+
+@login_required
+def acquisti(request):
+    qs = OrdineAcquisto.objects.select_related("produttore", "ordine__cliente").prefetch_related("righe")
+    return render(request, "ws/acquisti.html", {"acquisti": qs})
+
+
+@login_required
+def acquisto(request, pk):
+    oa = get_object_or_404(OrdineAcquisto.objects.select_related("produttore", "ordine__cliente"), pk=pk)
+    return render(request, "ws/acquisto.html", {"d": oa, "righe": oa.righe.all(), "azienda": Azienda.corrente()})
+
+
+@login_required
+def ddt_elenco(request):
+    return render(request, "ws/ddt_elenco.html", {"ddt": DDT.objects.select_related("cliente", "ordine")})
+
+
+@login_required
+def ddt(request, pk):
+    d = get_object_or_404(DDT.objects.select_related("cliente", "ordine"), pk=pk)
+    return render(request, "ws/ddt.html", {"d": d, "righe": d.righe.all(), "azienda": Azienda.corrente()})
+
+
+@login_required
+def prefatture(request):
+    qs = PreFattura.objects.select_related("cliente", "ordine").prefetch_related("righe")
+    return render(request, "ws/prefatture.html", {"prefatture": qs})
+
+
+@login_required
+def prefattura(request, pk):
+    pf = get_object_or_404(PreFattura.objects.select_related("cliente", "ordine", "ddt"), pk=pk)
+    return render(
+        request,
+        "ws/prefattura.html",
+        {"d": pf, "righe": pf.righe.all(), "azienda": Azienda.corrente(), "controlli": documenti.controlli_prefattura(pf)},
+    )
+
+
+@richiede("change", PreFattura)
+def prefattura_esporta(request, pk, formato):
+    from django.http import HttpResponse
+
+    pf = get_object_or_404(PreFattura.objects.select_related("cliente", "ordine", "ddt"), pk=pk)
+    if formato == "xml":
+        contenuto, tipo, nome = documenti.prefattura_xml(pf), "application/xml", documenti.nome_file_xml(pf)
+    elif formato == "csv":
+        contenuto, tipo, nome = documenti.prefattura_csv(pf), "text/csv; charset=utf-8", f"{pf.numero}.csv"
+    else:
+        raise Http404
+    if pf.stato == PreFattura.Stato.BOZZA:
+        pf.stato = PreFattura.Stato.ESPORTATA
+        pf.save(update_fields=["stato"])
+    risposta = HttpResponse(contenuto, content_type=tipo)
+    risposta["Content-Disposition"] = f'attachment; filename="{nome}"'
+    return risposta
+
+
+@login_required
+def azienda(request):
+    a = Azienda.objects.first()
+    if a is None:
+        return redirect("nuovo", "azienda")
+    return redirect("modifica", "azienda", a.pk)

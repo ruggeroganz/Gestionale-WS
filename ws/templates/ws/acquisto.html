@@ -1,0 +1,24 @@
+{% extends "ws/base.html" %}
+{% load humanize %}
+{% block title %}Ordine d'acquisto {{ d.numero }}{% endblock %}
+{% block content %}
+<div class="actions noprint" style="margin-bottom:14px">
+  {% if d.ordine %}<a class="btn sec" href="{{ d.ordine.get_absolute_url }}">← Ordine cliente {{ d.ordine.numero }}</a>{% endif %}
+  <a class="btn sec" href="{% url 'modifica' 'acquisto' d.pk %}">Modifica / stato / fattura produttore</a>
+  <a class="btn sec" href="{% url 'nuovo' 'rigaacquisto' %}?ordine_acquisto={{ d.pk }}">+ Riga</a>
+  <button class="btn" onclick="window.print()">Stampa / salva PDF</button>
+  <span class="badge info">{{ d.get_stato_display }}</span>
+</div>
+{% if d.ddt_fornitore or d.fattura_fornitore %}<div class="alert ok noprint">Dal produttore — DDT: {{ d.ddt_fornitore|default:"non registrato" }} · Fattura: {{ d.fattura_fornitore|default:"non registrata" }}{% if d.importo_fattura_fornitore %} ({{ d.importo_fattura_fornitore|floatformat:"2g" }} €){% endif %}</div>{% endif %}
+<div class="doc">
+  <h1>Ordine d'acquisto {{ d.numero }}</h1><div class="muted">del {{ d.data|date:"d/m/Y" }}</div>
+  <div class="parti"><div><h3>Committente</h3><strong>{{ azienda.ragione_sociale }}</strong><br>{{ azienda.indirizzo }}<br>{{ azienda.cap }} {{ azienda.comune }} {{ azienda.provincia }}{% if azienda.partita_iva %}<br>P. IVA {{ azienda.partita_iva }}{% endif %}</div>
+    <div><h3>Produttore</h3><strong>{{ d.produttore.nome }}</strong><br>{{ d.produttore.indirizzo }}{% if d.produttore.partita_iva %}<br>P. IVA {{ d.produttore.partita_iva }}{% endif %}</div></div>
+  <table><tr><th>Descrizione</th><th class="n">Quantità</th><th class="n">Costo unitario</th><th class="n">Importo</th><th class="noprint"></th></tr>
+  {% for r in righe %}<tr><td>{{ r.descrizione }}<div class="small muted">{{ r.get_tipo_display }}</div></td><td class="n">{{ r.quantita|intcomma }}</td><td class="n">{{ r.costo_unitario|floatformat:3 }} €</td><td class="n">{{ r.totale|floatformat:"2g" }} €</td><td class="act noprint"><a href="{% url 'modifica' 'rigaacquisto' r.pk %}">modifica</a></td></tr>{% endfor %}
+  <tr class="tot"><td colspan="3">Totale imponibile</td><td class="n">{{ d.totale|floatformat:"2g" }} €</td><td class="noprint"></td></tr></table>
+  <p style="margin-top:18px">Consegna richiesta: <strong>{{ d.data_consegna_richiesta|date:"d/m/Y"|default:"da concordare" }}</strong></p>
+  <p class="small muted">Il packaging indicato come «in deposito» resta presso il produttore, a disposizione per le produzioni successive dello stesso cliente.</p>
+  {% if d.note %}<p>{{ d.note|linebreaksbr }}</p>{% endif %}
+</div>
+{% endblock %}

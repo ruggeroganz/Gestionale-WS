@@ -75,9 +75,41 @@ cliente: il residuo resta di proprietà del cliente, in deposito presso il
 produttore. Per ogni ordine il fabbisogno è distinta base × quantità, meno la
 giacenza presso quel produttore, arrotondato al lotto minimo (MOQ).
 
+### Documenti
+
+Dall'ordine cliente si generano, già compilati e poi modificabili:
+
+- **Ordine d'acquisto al produttore**: prodotto finito (costo dalla quotazione
+  accettata) più il packaging acquistato in eccedenza, da tenere in deposito.
+  Sullo stesso ordine si annotano DDT e fattura ricevuti dal produttore.
+- **DDT** verso il cliente.
+- **Pre-fattura**: prodotto finito più rifatturazione del packaging residuo.
+  Non è una fattura: si scarica in **XML FatturaPA 1.2** (o in CSV) e si importa
+  nel software di contabilità, che assegna il numero definitivo e la invia allo
+  SDI. Numero e data definitivi si riportano poi sulla pre-fattura. Prima
+  dell'esportazione la pagina elenca i dati mancanti (partita IVA, codice SDI,
+  indirizzo, prezzi a zero). I dati dell'azienda emittente si inseriscono in
+  «Dati azienda».
+
+L'XML segue il tracciato ufficiale ma non è stato ancora validato con lo schema
+XSD dell'Agenzia delle Entrate né provato con un'importazione reale: va fatto
+un test con il commercialista prima di usarlo.
+
+### Ruoli
+
+Tutti gli utenti consultano tutto; inserire e modificare dipende dal gruppo
+(valori iniziali in `ws/ruoli.py`, poi modificabili dal pannello di
+amministrazione; `python manage.py imposta_ruoli` li ripristina).
+
+| Ruolo | Può inserire e modificare |
+| --- | --- |
+| Commerciale | Clienti, progetti, quotazioni, campionature, ordini cliente |
+| Customer service e acquisti | Tutto tranne pre-fatture e dati azienda |
+| Amministrazione | Clienti, produttori, dati azienda, pre-fatture, fattura del produttore sugli ordini d'acquisto |
+
 ## Non ancora incluso
 
-Ordine d'acquisto al produttore, DDT e fatture; permessi differenziati per
-ruolo (oggi ogni utente autenticato vede e modifica tutto); listino con
-scaglioni gestiti a parte (oggi è lo storico delle quotazioni); configurazione
-per la messa in produzione (database PostgreSQL, HTTPS, backup).
+Listino con scaglioni gestiti a parte (oggi è lo storico delle quotazioni);
+note di credito; pulsanti nascosti in base al ruolo (oggi l'operazione non
+permessa viene rifiutata con un messaggio); configurazione per la messa in
+produzione (database PostgreSQL, HTTPS, backup).

@@ -14,13 +14,22 @@
 {% else %}<div class="empty">Aggiungi i prodotti ordinati.</div>{% endif %}</div>
 
 <div class="card"><div class="ch"><h2>Fabbisogno di packaging</h2><span class="muted small">distinta base × quantità, al netto della giacenza presso {{ o.produttore }}</span></div>
-{% if fabbisogno %}<div class="tw"><table><tr><th>Packaging</th><th class="n">Necessari</th><th class="n">Già in giacenza</th><th class="n">Mancanti</th><th class="n">Da far acquistare (MOQ)</th><th class="n">Residuo dopo la produzione</th></tr>
+{% if fabbisogno %}<div class="tw"><table><tr><th>Packaging</th><th class="n">Necessari</th><th class="n">{% if registrato %}Giacenza prima{% else %}Già in giacenza{% endif %}</th><th class="n">Mancanti</th><th class="n">{% if registrato %}Acquistati{% else %}Da far acquistare (MOQ){% endif %}</th><th class="n">Residuo dopo la produzione</th></tr>
 {% for f in fabbisogno %}<tr><td><strong>{{ f.packaging.codice }}</strong> · {{ f.packaging.descrizione }}{% if f.packaging.moq %}<div class="small muted">lotto minimo {{ f.packaging.moq|intcomma }}</div>{% endif %}</td>
   <td class="n">{{ f.necessari|intcomma }}</td><td class="n">{{ f.giacenza|intcomma }}</td><td class="n">{{ f.mancante|intcomma }}</td>
   <td class="n">{% if f.da_ordinare %}<strong>{{ f.da_ordinare|intcomma }}</strong>{% else %}<span class="badge ok">coperto</span>{% endif %}</td><td class="n">{{ f.residuo|intcomma }}</td></tr>{% endfor %}</table></div>
-<div class="cb">{% if movimenti %}<span class="badge ok">Movimenti di magazzino registrati</span> <a href="{% url 'magazzino' %}">vedi magazzino</a>
+<div class="cb">{% if registrato %}<span class="badge ok">Movimenti di magazzino registrati</span> <a href="{% url 'magazzino' %}">vedi magazzino</a>
   {% else %}<form method="post" action="{% url 'ordine_registra_packaging' o.pk %}" onsubmit="return confirm('Registrare carico e consumo del packaging per questo ordine?')">{% csrf_token %}
     <button class="btn sec">Registra carico e consumo a magazzino</button> <span class="small muted">Da fare a produzione avvenuta: il residuo resta a disposizione del cliente per i riordini.</span></form>{% endif %}</div>
 {% else %}<div class="empty">Il fabbisogno si calcola quando l'ordine ha righe con distinta base.</div>{% endif %}</div>
+<div class="card"><div class="ch"><h2>Documenti</h2><span class="actions">
+  <form class="inline" method="post" action="{% url 'ordine_genera_acquisto' o.pk %}">{% csrf_token %}<button class="btn sm">+ Ordine al produttore</button></form>
+  <form class="inline" method="post" action="{% url 'ordine_genera_ddt' o.pk %}">{% csrf_token %}<button class="btn sm">+ DDT</button></form>
+  <form class="inline" method="post" action="{% url 'ordine_genera_prefattura' o.pk %}">{% csrf_token %}<button class="btn sm">+ Pre-fattura</button></form></span></div>
+{% if acquisti or ddt or prefatture %}<div class="tw"><table><tr><th>Documento</th><th>Data</th><th>Stato</th><th class="n">Importo</th></tr>
+{% for a in acquisti %}<tr><td><a href="{{ a.get_absolute_url }}">Ordine d'acquisto {{ a.numero }}</a><div class="small muted">a {{ a.produttore }}</div></td><td>{{ a.data|date:"d/m/Y" }}</td><td><span class="badge">{{ a.get_stato_display }}</span></td><td class="n">{{ a.totale|floatformat:"2g" }} €</td></tr>{% endfor %}
+{% for t in ddt %}<tr><td><a href="{{ t.get_absolute_url }}">DDT {{ t.numero }}</a></td><td>{{ t.data|date:"d/m/Y" }}</td><td></td><td></td></tr>{% endfor %}
+{% for f in prefatture %}<tr><td><a href="{{ f.get_absolute_url }}">Pre-fattura {{ f.numero }}</a>{% if f.numero_fattura %}<div class="small muted">fattura n. {{ f.numero_fattura }}</div>{% endif %}</td><td>{{ f.data|date:"d/m/Y" }}</td><td><span class="badge {% if f.stato == 'registrata' %}ok{% elif f.stato == 'esportata' %}info{% endif %}">{{ f.get_stato_display }}</span></td><td class="n">{{ f.imponibile|floatformat:"2g" }} €</td></tr>{% endfor %}
+</table></div>{% else %}<div class="empty">Nessun documento. I pulsanti qui sopra li compilano a partire dalle righe dell'ordine e dal fabbisogno di packaging.</div>{% endif %}</div>
 {% if o.note %}<div class="card"><div class="ch"><h2>Note</h2></div><div class="cb">{{ o.note|linebreaksbr }}</div></div>{% endif %}
 {% endblock %}

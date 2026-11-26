@@ -1,0 +1,11 @@
+{% extends "ws/base.html" %}
+{% block title %}Pre-fatture{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Pre-fatture</h1><div class="sub">Bozze da importare nel software di contabilità, che assegna il numero definitivo e invia la fattura elettronica.</div></div><div class="actions"><a class="btn sec" href="{% url 'nuovo' 'prefattura' %}">+ Pre-fattura manuale</a></div></div>
+<div class="card"><div class="tw"><table><tr><th>Pre-fattura</th><th>Data</th><th>Cliente</th><th>Ordine</th><th>Stato</th><th>Fattura definitiva</th><th class="n">Imponibile</th><th class="n">Totale</th></tr>
+{% for f in prefatture %}<tr><td><a href="{{ f.get_absolute_url }}">{{ f.numero }}</a></td><td>{{ f.data|date:"d/m/Y" }}</td><td>{{ f.cliente }}</td><td>{% if f.ordine %}<a href="{{ f.ordine.get_absolute_url }}">{{ f.ordine.numero }}</a>{% else %}—{% endif %}</td>
+  <td><span class="badge {% if f.stato == 'registrata' %}ok{% elif f.stato == 'esportata' %}info{% endif %}">{{ f.get_stato_display }}</span></td>
+  <td>{% if f.numero_fattura %}n. {{ f.numero_fattura }}{% if f.data_fattura %} del {{ f.data_fattura|date:"d/m/Y" }}{% endif %}{% else %}—{% endif %}</td>
+  <td class="n">{{ f.imponibile|floatformat:"2g" }} €</td><td class="n">{{ f.totale|floatformat:"2g" }} €</td></tr>
+{% empty %}<tr><td colspan="8" class="muted">Nessuna pre-fattura.</td></tr>{% endfor %}</table></div></div>
+{% endblock %}

@@ -1,0 +1,24 @@
+{% extends "ws/base.html" %}
+{% load humanize %}
+{% block title %}DDT {{ d.numero }}{% endblock %}
+{% block content %}
+<div class="actions noprint" style="margin-bottom:14px">
+  {% if d.ordine %}<a class="btn sec" href="{{ d.ordine.get_absolute_url }}">← Ordine {{ d.ordine.numero }}</a>{% endif %}
+  <a class="btn sec" href="{% url 'modifica' 'ddt' d.pk %}">Modifica dati di trasporto</a>
+  <a class="btn sec" href="{% url 'nuovo' 'rigaddt' %}?ddt={{ d.pk }}">+ Riga</a>
+  <button class="btn" onclick="window.print()">Stampa / salva PDF</button>
+</div>
+<div class="doc">
+  <h1>Documento di trasporto {{ d.numero }}</h1><div class="muted">del {{ d.data|date:"d/m/Y" }}{% if d.ordine %} · Ns. ordine {{ d.ordine.numero }}{% if d.ordine.riferimento_cliente %} · Vs. riferimento {{ d.ordine.riferimento_cliente }}{% endif %}{% endif %}</div>
+  <div class="parti"><div><h3>Mittente</h3><strong>{{ azienda.ragione_sociale }}</strong><br>{{ azienda.indirizzo }}<br>{{ azienda.cap }} {{ azienda.comune }} {{ azienda.provincia }}{% if azienda.partita_iva %}<br>P. IVA {{ azienda.partita_iva }}{% endif %}
+      {% if d.luogo_partenza %}<p class="small" style="margin-top:8px">Partenza merce: {{ d.luogo_partenza }}</p>{% endif %}</div>
+    <div><h3>Destinatario</h3><strong>{{ d.cliente.ragione_sociale }}</strong>{% if d.cliente.partita_iva %}<br>P. IVA {{ d.cliente.partita_iva }}{% endif %}
+      <p class="small" style="margin-top:8px">Destinazione: {{ d.destinazione|default:"—" }}</p></div></div>
+  <table><tr><th>Codice</th><th>Descrizione</th><th>Lotto</th><th class="n">Quantità</th><th class="noprint"></th></tr>
+  {% for r in righe %}<tr><td>{{ r.codice }}</td><td>{{ r.descrizione }}</td><td>{{ r.lotto|default:"—" }}</td><td class="n">{{ r.quantita|intcomma }} pz</td><td class="act noprint"><a href="{% url 'modifica' 'rigaddt' r.pk %}">modifica</a></td></tr>{% endfor %}</table>
+  <dl class="dl" style="margin-top:20px"><dt>Causale</dt><dd>{{ d.causale }}</dd><dt>Vettore</dt><dd>{{ d.vettore|default:"—" }}</dd><dt>Porto</dt><dd>{{ d.porto|default:"—" }}</dd>
+    <dt>Colli</dt><dd>{{ d.colli|default:"—" }}</dd><dt>Peso</dt><dd>{% if d.peso_kg %}{{ d.peso_kg|floatformat:"-2" }} kg{% else %}—{% endif %}</dd><dt>Aspetto dei beni</dt><dd>{{ d.aspetto|default:"—" }}</dd></dl>
+  {% if d.note %}<p style="margin-top:12px">{{ d.note|linebreaksbr }}</p>{% endif %}
+  <div class="firma"><div>Firma del vettore</div><div>Firma del destinatario</div></div>
+</div>
+{% endblock %}

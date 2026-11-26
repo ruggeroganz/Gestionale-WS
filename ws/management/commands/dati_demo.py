@@ -6,9 +6,10 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.management.base import BaseCommand, CommandError
 
-from ws import flusso
+from ws import documenti, flusso
 from ws.models import (
     Artwork,
+    Azienda,
     Campionatura,
     Cliente,
     Componente,
@@ -52,18 +53,19 @@ class Command(BaseCommand):
             ("amministrazione", "Elena", "Amministrazione", "Amministrazione"),
         ]:
             g, _ = Group.objects.get_or_create(name=gruppo)
-            u = User.objects.create_user(username, password=PASSWORD, first_name=nome, last_name=cognome, is_staff=True)
+            u = User.objects.create_user(username, password=PASSWORD, first_name=nome, last_name=cognome)
             u.groups.add(g)
             utenti[username] = u
         if not User.objects.filter(username="admin").exists():
             User.objects.create_superuser("admin", password=PASSWORD)
 
-        bio = Produttore.objects.create(nome="Biopharma", paese="Italia", lead_time_giorni=150, note="Full service, produzione italiana.")
+        Azienda.objects.create(ragione_sociale="WS Srl (demo)", partita_iva="00000000000", indirizzo="Via Demo 1", cap="20100", comune="Milano", provincia="MI", iban="IT00X0000000000000000000000")
+        bio = Produttore.objects.create(nome="Biopharma", paese="Italia", indirizzo="Zona industriale (indirizzo demo)", lead_time_giorni=150, note="Full service, produzione italiana.")
         cina = Produttore.objects.create(nome="Guangzhou Beauty Manufacturing", paese="Cina", lead_time_giorni=180, note="Full service, include trasporto via mare.")
 
-        lum = Cliente.objects.create(ragione_sociale="Lumière Beauty Srl", tipo="brand", stato="attivo", paese="Italia", indirizzo="Via Esempio 12, Milano", partita_iva="IT00000000001", commerciale=utenti["commerciale"])
-        aur = Cliente.objects.create(ragione_sociale="Profumerie Aurora SpA", tipo="catena", stato="attivo", paese="Italia", indirizzo="Corso Demo 5, Bologna", partita_iva="IT00000000002", commerciale=utenti["commerciale"])
-        nor = Cliente.objects.create(ragione_sociale="Nordic Glow AB", tipo="brand", stato="potenziale", paese="Svezia", commerciale=utenti["commerciale"])
+        lum = Cliente.objects.create(ragione_sociale="Lumière Beauty Srl", tipo="brand", stato="attivo", paese="Italia", indirizzo="Via Esempio 12", cap="20121", comune="Milano", provincia="MI", codice_sdi="ABC1234", pagamento="Bonifico 30 gg d.f.f.m.", partita_iva="00000000001", commerciale=utenti["commerciale"])
+        aur = Cliente.objects.create(ragione_sociale="Profumerie Aurora SpA", tipo="catena", stato="attivo", paese="Italia", indirizzo="Corso Demo 5", cap="40121", comune="Bologna", provincia="BO", pec="aurora@example.com", pagamento="Bonifico 60 gg d.f.f.m.", partita_iva="00000000002", commerciale=utenti["commerciale"])
+        nor = Cliente.objects.create(ragione_sociale="Nordic Glow AB", tipo="brand", stato="potenziale", paese="Svezia", codice_paese="SE", commerciale=utenti["commerciale"])
         Contatto.objects.create(cliente=lum, nome="Sara Bianchi", ruolo="Product manager", email="sara@example.com")
         Contatto.objects.create(cliente=aur, nome="Luca Verdi", ruolo="Buyer private label", email="luca@example.com")
 
@@ -86,9 +88,9 @@ class Command(BaseCommand):
         Campionatura.objects.create(progetto=p1, versione_formula=f1v1, data_invio=giorni(-320), esito="approvata", data_feedback=giorni(-305), feedback="Texture e profumo approvati.")
         TestStabilita.objects.create(progetto=p1, versione_formula=f1v1, data_inizio=giorni(-300), esito="superata", data_esito=giorni(-210), note="Compatibile con la bombola.")
         a1 = Artwork.objects.create(cliente=lum, progetto=p1, nome="Litografia bombola 200 ml", versione_formula=f1v1, stato="approvato", data_approvazione=giorni(-200))
-        k_bom = Packaging.objects.create(cliente=lum, componente=bombola, descrizione="Bombola 200 ml litografata Lumière", decorazione="litografia", colore="Bianco + Pantone 7421 C", artwork=a1, riporta_inci=True, moq=20000)
-        k_cap = Packaging.objects.create(cliente=lum, componente=cap, descrizione="Cap Ø 45 Pantone 7421 C", decorazione="colore", colore="Pantone 7421 C", moq=30000)
-        k_ero = Packaging.objects.create(cliente=lum, componente=erog, descrizione="Erogatore mousse bianco", decorazione="neutro", moq=10000)
+        k_bom = Packaging.objects.create(cliente=lum, componente=bombola, descrizione="Bombola 200 ml litografata Lumière", decorazione="litografia", colore="Bianco + Pantone 7421 C", artwork=a1, riporta_inci=True, moq=20000, costo_unitario=D("0.420"), prezzo_unitario=D("0.480"))
+        k_cap = Packaging.objects.create(cliente=lum, componente=cap, descrizione="Cap Ø 45 Pantone 7421 C", decorazione="colore", colore="Pantone 7421 C", moq=30000, costo_unitario=D("0.060"), prezzo_unitario=D("0.072"))
+        k_ero = Packaging.objects.create(cliente=lum, componente=erog, descrizione="Erogatore mousse bianco", decorazione="neutro", moq=10000, costo_unitario=D("0.110"), prezzo_unitario=D("0.130"))
         sku1 = Prodotto.objects.create(codice="LUM-MOU-200", nome="Mousse volumizzante Lumière", cliente=lum, progetto=p1, versione_formula=f1v2, formato="200 ml")
         for k in (k_bom, k_cap, k_ero):
             RigaDistinta.objects.create(prodotto=sku1, packaging=k)
@@ -96,6 +98,15 @@ class Command(BaseCommand):
         RigaOrdine.objects.create(ordine=o1, prodotto=sku1, quantita=5000, prezzo_unitario=D("2.750"))
         flusso.registra_packaging(o1)
         MovimentoPackaging.objects.filter(ordine=o1).update(data=giorni(-45))
+        oa = documenti.genera_ordine_acquisto(o1)
+        oa.data, oa.stato, oa.ddt_fornitore, oa.fattura_fornitore, oa.importo_fattura_fornitore = giorni(-194), "ricevuto", f"n. 812 del {giorni(-42):%d/%m/%Y}", f"n. 1045 del {giorni(-40):%d/%m/%Y}", oa.totale
+        oa.save()
+        ddt = documenti.genera_ddt(o1)
+        ddt.data, ddt.vettore, ddt.colli, ddt.aspetto = giorni(-41), "Corriere demo", 14, "Cartoni su pallet"
+        ddt.save()
+        pf = documenti.genera_prefattura(o1)
+        pf.data, pf.data_scadenza = giorni(-40), giorni(20)
+        pf.save()
         Evento.objects.create(progetto=p1, testo="Prima produzione consegnata: 5.000 pezzi. Residuo di packaging in deposito da Biopharma.", automatico=True)
         Evento.objects.create(progetto=p1, utente=utenti["customer"], testo="Biopharma propone la formula v2 con pantenolo per il riordino. Da verificare le bombole già litografate.")
         o2 = OrdineCliente.objects.create(cliente=lum, progetto=p1, produttore=bio, data=t, data_consegna_prevista=giorni(60), stato="bozza", note="Riordino.")

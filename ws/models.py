@@ -51,7 +51,15 @@ class Cliente(models.Model):
     stato = models.CharField(max_length=20, choices=Stato.choices, default=Stato.POTENZIALE)
     partita_iva = models.CharField("partita IVA", max_length=30, blank=True)
     paese = models.CharField(max_length=60, default="Italia")
-    indirizzo = models.CharField(max_length=250, blank=True)
+    indirizzo = models.CharField(max_length=250, blank=True, help_text="Via e numero civico.")
+    cap = models.CharField("CAP", max_length=10, blank=True)
+    comune = models.CharField(max_length=80, blank=True)
+    provincia = models.CharField(max_length=2, blank=True, help_text="Sigla, solo per l'Italia.")
+    codice_paese = models.CharField("codice paese", max_length=2, default="IT", help_text="Sigla ISO: IT, DE, SE…")
+    codice_fiscale = models.CharField(max_length=30, blank=True)
+    codice_sdi = models.CharField("codice destinatario SDI", max_length=7, blank=True)
+    pec = models.EmailField("PEC", blank=True)
+    pagamento = models.CharField("condizioni di pagamento", max_length=120, blank=True, help_text="Es. Bonifico 30 gg d.f.f.m.")
     email = models.EmailField(blank=True)
     telefono = models.CharField(max_length=40, blank=True)
     commerciale = models.ForeignKey(
@@ -97,6 +105,8 @@ class Produttore(models.Model):
     lead_time_giorni = models.PositiveIntegerField(
         "lead time (giorni)", default=150, help_text="Giorni dall'ordine definitivo alla consegna."
     )
+    indirizzo = models.CharField(max_length=250, blank=True)
+    partita_iva = models.CharField("partita IVA", max_length=30, blank=True)
     email = models.EmailField(blank=True)
     telefono = models.CharField(max_length=40, blank=True)
     note = models.TextField(blank=True)
@@ -524,6 +534,12 @@ class Packaging(models.Model):
         "riporta l'INCI", default=False, help_text="Spuntare se l'INCI è stampato su questo pezzo."
     )
     moq = models.PositiveIntegerField("lotto minimo (MOQ)", null=True, blank=True)
+    costo_unitario = models.DecimalField(
+        "costo dal produttore (€/pezzo)", max_digits=12, decimal_places=4, null=True, blank=True
+    )
+    prezzo_unitario = models.DecimalField(
+        "prezzo di rifatturazione al cliente (€/pezzo)", max_digits=12, decimal_places=4, null=True, blank=True
+    )
     note = models.TextField(blank=True)
 
     class Meta:
@@ -709,3 +725,263 @@ class MovimentoPackaging(models.Model):
 
     def get_absolute_url(self):
         return reverse("magazzino")
+
+
+# --------------------------------------------------------------------------
+# Documenti: ordine d'acquisto al produttore, DDT, pre-fattura
+# --------------------------------------------------------------------------
+DUE = Decimal("0.01")
+
+
+def euro(valore):
+    from decimal import ROUND_HALF_UP
+
+    return Decimal(valore).quantize(DUE, rounding=ROUND_HALF_UP)
+
+
+class Azienda(models.Model):
+    """Dati della nostra azienda, usati su documenti e pre-fatture (un solo record)."""
+
+    ragione_sociale = models.CharField(max_length=200)
+    partita_iva = models.CharField("partita IVA", max_length=30, blank=True, help_text="Senza il prefisso IT.")
+    codice_fiscale = models.CharField(max_length=30, blank=True)
+    regime_fiscale = models.CharField(max_length=4, default="RF01", help_text="Codice FatturaPA: RF01 = ordinario.")
+    indirizzo = models.CharField(max_length=250, blank=True)
+    cap = models.CharField("CAP", max_length=10, blank=True)
+    comune = models.CharField(max_length=80, blank=True)
+    provincia = models.CharField(max_length=2, blank=True)
+    codice_paese = models.CharField("codice paese", max_length=2, default="IT")
+    iban = models.CharField("IBAN", max_length=34, blank=True)
+    email = models.EmailField(blank=True)
+    telefono = models.CharField(max_length=40, blank=True)
+
+    class Meta:
+        verbose_name = "dati azienda"
+        verbose_name_plural = "dati azienda"
+
+    def __str__(self):
+        return self.ragione_sociale
+
+    def get_absolute_url(self):
+        return reverse("azienda")
+
+    @classmethod
+    def corrente(cls):
+        return cls.objects.first() or cls(ragione_sociale=settings.NOME_AZIENDA)
+
+
+class OrdineAcquisto(models.Model):
+    """Ordine al produttore full service: prodotto finito più packaging da tenere in deposito."""
+
+    class Stato(models.TextChoices):
+        BOZZA = "bozza", "Bozza"
+        INVIATO = "inviato", "Inviato al produttore"
+        CONFERMATO = "confermato", "Confermato dal produttore"
+        RICEVUTO = "ricevuto", "Merce consegnata"
+        ANNULLATO = "annullato", "Annullato"
+
+    numero = models.CharField(max_length=20, unique=True, blank=True)
+    produttore = models.ForeignKey(Produttore, on_delete=models.PROTECT, related_name="ordini_acquisto")
+    ordine = models.ForeignKey(
+        OrdineCliente, null=True, blank=True, on_delete=models.SET_NULL, related_name="ordini_acquisto",
+        verbose_name="ordine cliente",
+    )
+    data = models.DateField(default=oggi)
+    data_consegna_richiesta = models.DateField(null=True, blank=True)
+    stato = models.CharField(max_length=20, choices=Stato.choices, default=Stato.BOZZA)
+    ddt_fornitore = models.CharField("DDT del produttore (numero e data)", max_length=120, blank=True)
+    fattura_fornitore = models.CharField("fattura del produttore (numero e data)", max_length=120, blank=True)
+    importo_fattura_fornitore = models.DecimalField(
+        "importo fattura del produttore (€)", max_digits=12, decimal_places=2, null=True, blank=True
+    )
+    note = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-data", "-pk"]
+        verbose_name = "ordine d'acquisto"
+        verbose_name_plural = "ordini d'acquisto"
+
+    def __str__(self):
+        return self.numero
+
+    def save(self, *args, **kwargs):
+        if not self.numero:
+            self.numero = _prossimo_codice(OrdineAcquisto, "OA", "numero")
+        super().save(*args, **kwargs)
+
+    def get_absolute_url(self):
+        return reverse("acquisto", args=[self.pk])
+
+    @property
+    def totale(self):
+        return sum((r.totale for r in self.righe.all()), Decimal("0"))
+
+
+class TipoRiga(models.TextChoices):
+    PRODOTTO = "prodotto", "Prodotto finito"
+    PACKAGING = "packaging", "Packaging in deposito"
+    ALTRO = "altro", "Altro"
+
+
+class RigaAcquisto(models.Model):
+    ordine_acquisto = models.ForeignKey(OrdineAcquisto, on_delete=models.CASCADE, related_name="righe")
+    tipo = models.CharField(max_length=20, choices=TipoRiga.choices, default=TipoRiga.PRODOTTO)
+    descrizione = models.CharField(max_length=250)
+    quantita = models.PositiveIntegerField("quantità", default=1)
+    costo_unitario = models.DecimalField("costo unitario (€)", max_digits=12, decimal_places=4, default=0)
+
+    class Meta:
+        ordering = ["pk"]
+        verbose_name = "riga ordine d'acquisto"
+        verbose_name_plural = "righe ordine d'acquisto"
+
+    def __str__(self):
+        return self.descrizione
+
+    def get_absolute_url(self):
+        return self.ordine_acquisto.get_absolute_url()
+
+    @property
+    def totale(self):
+        return self.quantita * self.costo_unitario
+
+
+class DDT(models.Model):
+    numero = models.CharField(max_length=20, unique=True, blank=True)
+    cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT, related_name="ddt")
+    ordine = models.ForeignKey(
+        OrdineCliente, null=True, blank=True, on_delete=models.SET_NULL, related_name="ddt",
+        verbose_name="ordine cliente",
+    )
+    data = models.DateField(default=oggi)
+    luogo_partenza = models.CharField("luogo di partenza della merce", max_length=250, blank=True)
+    destinazione = models.CharField(max_length=250, blank=True)
+    causale = models.CharField(max_length=80, default="Vendita")
+    vettore = models.CharField(max_length=120, blank=True)
+    porto = models.CharField(max_length=40, blank=True, help_text="Es. franco, assegnato.")
+    colli = models.PositiveIntegerField(null=True, blank=True)
+    peso_kg = models.DecimalField("peso (kg)", max_digits=10, decimal_places=2, null=True, blank=True)
+    aspetto = models.CharField("aspetto esteriore dei beni", max_length=80, blank=True, help_text="Es. cartoni su pallet.")
+    note = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-data", "-pk"]
+        verbose_name = "DDT"
+        verbose_name_plural = "DDT"
+
+    def __str__(self):
+        return self.numero
+
+    def save(self, *args, **kwargs):
+        if not self.numero:
+            self.numero = _prossimo_codice(DDT, "DDT", "numero")
+        super().save(*args, **kwargs)
+
+    def get_absolute_url(self):
+        return reverse("ddt", args=[self.pk])
+
+
+class RigaDDT(models.Model):
+    ddt = models.ForeignKey(DDT, on_delete=models.CASCADE, related_name="righe")
+    codice = models.CharField(max_length=40, blank=True)
+    descrizione = models.CharField(max_length=250)
+    quantita = models.PositiveIntegerField("quantità")
+    lotto = models.CharField("lotto di produzione", max_length=60, blank=True)
+
+    class Meta:
+        ordering = ["pk"]
+        verbose_name = "riga DDT"
+        verbose_name_plural = "righe DDT"
+
+    def __str__(self):
+        return self.descrizione
+
+    def get_absolute_url(self):
+        return self.ddt.get_absolute_url()
+
+
+class PreFattura(models.Model):
+    """Bozza di fattura da importare nel software di contabilità, che assegna il numero definitivo."""
+
+    class Stato(models.TextChoices):
+        BOZZA = "bozza", "Bozza"
+        ESPORTATA = "esportata", "Esportata"
+        REGISTRATA = "registrata", "Registrata in contabilità"
+
+    class Natura(models.TextChoices):
+        NESSUNA = "", "Imponibile (IVA applicata)"
+        N3_1 = "N3.1", "N3.1 · Non imponibile, esportazione"
+        N3_2 = "N3.2", "N3.2 · Non imponibile, cessione intracomunitaria"
+        N3_5 = "N3.5", "N3.5 · Non imponibile, dichiarazione d'intento"
+        N2_1 = "N2.1", "N2.1 · Non soggetta, artt. da 7 a 7-septies"
+
+    numero = models.CharField(max_length=20, unique=True, blank=True)
+    cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT, related_name="prefatture")
+    ordine = models.ForeignKey(
+        OrdineCliente, null=True, blank=True, on_delete=models.SET_NULL, related_name="prefatture",
+        verbose_name="ordine cliente",
+    )
+    ddt = models.ForeignKey(DDT, null=True, blank=True, on_delete=models.SET_NULL, related_name="prefatture", verbose_name="DDT")
+    data = models.DateField(default=oggi)
+    aliquota_iva = models.DecimalField("aliquota IVA (%)", max_digits=5, decimal_places=2, default=Decimal("22"))
+    natura = models.CharField("natura IVA", max_length=4, choices=Natura.choices, blank=True, help_text="Da indicare solo con aliquota 0.")
+    pagamento = models.CharField("condizioni di pagamento", max_length=120, blank=True)
+    data_scadenza = models.DateField("scadenza pagamento", null=True, blank=True)
+    stato = models.CharField(max_length=20, choices=Stato.choices, default=Stato.BOZZA)
+    numero_fattura = models.CharField(
+        "numero fattura definitivo", max_length=40, blank=True, help_text="Assegnato dal software di contabilità."
+    )
+    data_fattura = models.DateField("data fattura definitiva", null=True, blank=True)
+    note = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-data", "-pk"]
+        verbose_name = "pre-fattura"
+        verbose_name_plural = "pre-fatture"
+
+    def __str__(self):
+        return self.numero
+
+    def save(self, *args, **kwargs):
+        if not self.numero:
+            self.numero = _prossimo_codice(PreFattura, "PF", "numero")
+        super().save(*args, **kwargs)
+
+    def get_absolute_url(self):
+        return reverse("prefattura", args=[self.pk])
+
+    @property
+    def imponibile(self):
+        return sum((r.totale for r in self.righe.all()), Decimal("0.00"))
+
+    @property
+    def imposta(self):
+        return euro(self.imponibile * self.aliquota_iva / 100)
+
+    @property
+    def totale(self):
+        return self.imponibile + self.imposta
+
+
+class RigaPreFattura(models.Model):
+    prefattura = models.ForeignKey(PreFattura, on_delete=models.CASCADE, related_name="righe")
+    tipo = models.CharField(max_length=20, choices=TipoRiga.choices, default=TipoRiga.PRODOTTO)
+    codice = models.CharField(max_length=40, blank=True)
+    descrizione = models.CharField(max_length=250)
+    quantita = models.PositiveIntegerField("quantità", default=1)
+    prezzo_unitario = models.DecimalField("prezzo unitario (€)", max_digits=12, decimal_places=4, default=0)
+
+    class Meta:
+        ordering = ["pk"]
+        verbose_name = "riga pre-fattura"
+        verbose_name_plural = "righe pre-fattura"
+
+    def __str__(self):
+        return self.descrizione
+
+    def get_absolute_url(self):
+        return self.prefattura.get_absolute_url()
+
+    @property
+    def totale(self):
+        return euro(self.quantita * self.prezzo_unitario)

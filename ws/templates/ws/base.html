@@ -24,9 +24,14 @@
     <a href="{% url 'catalogo' %}" class="{% if n == 'catalogo' %}on{% endif %}">Packaging</a>
     <a href="{% url 'magazzino' %}" class="{% if n == 'magazzino' %}on{% endif %}">Magazzino packaging</a>
     <a href="{% url 'ordini' %}" class="{% if n == 'ordini' or n == 'ordine' %}on{% endif %}">Ordini clienti</a>
+    <div class="sep">Documenti</div>
+    <a href="{% url 'acquisti' %}" class="{% if n == 'acquisti' or n == 'acquisto' %}on{% endif %}">Ordini ai produttori</a>
+    <a href="{% url 'ddt_elenco' %}" class="{% if n == 'ddt_elenco' or n == 'ddt' %}on{% endif %}">DDT</a>
+    <a href="{% url 'prefatture' %}" class="{% if n == 'prefatture' or n == 'prefattura' %}on{% endif %}">Pre-fatture</a>
     {% endwith %}
     <div class="user">
       {{ user.get_full_name|default:user.username }}<br>
+      {% if perms.ws.change_azienda %}<a href="{% url 'azienda' %}" style="display:inline;padding:0">Dati azienda</a> · {% endif %}
       {% if user.is_staff %}<a href="{% url 'admin:index' %}" style="display:inline;padding:0">Amministrazione</a> · {% endif %}
       <form class="inline" method="post" action="{% url 'logout' %}">{% csrf_token %}<button>Esci</button></form>
     </div>
