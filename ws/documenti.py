@@ -38,6 +38,17 @@ def _eccedenze(ordine):
     return [(r, r["da_ordinare"] - r["mancante"]) for r in flusso.piano_packaging(ordine) if r["da_ordinare"] > r["mancante"]]
 
 
+def _artwork_nuovi(ordine, campo):
+    """Artwork del packaging in distinta i cui impianti non sono ancora stati ordinati / fatturati."""
+    visti = {}
+    for riga in ordine.righe.select_related("prodotto"):
+        for d in riga.prodotto.distinta.select_related("packaging__artwork"):
+            a = d.packaging.artwork
+            if a is not None and not getattr(a, campo):
+                visti[a.pk] = a
+    return list(visti.values())
+
+
 def _costo_prodotto(ordine):
     """Costo unitario del prodotto finito dalla quotazione accettata del progetto, se c'è."""
     if not ordine.progetto_id:
@@ -72,6 +83,17 @@ def genera_ordine_acquisto(ordine):
             quantita=eccedenza,
             costo_unitario=k.costo_unitario or 0,
         )
+    for a in _artwork_nuovi(ordine, "impianto_ordinato"):
+        if a.costo_impianto:
+            RigaAcquisto.objects.create(
+                ordine_acquisto=oa,
+                tipo=TipoRiga.IMPIANTI,
+                descrizione=f"Impianti per nuovo artwork: {a}"[:250],
+                quantita=1,
+                costo_unitario=a.costo_impianto,
+            )
+        a.impianto_ordinato = True
+        a.save(update_fields=["impianto_ordinato"])
     return oa
 
 
@@ -133,6 +155,17 @@ def genera_prefattura(ordine):
             quantita=eccedenza,
             prezzo_unitario=k.prezzo_unitario or 0,
         )
+    for a in _artwork_nuovi(ordine, "impianto_fatturato"):
+        if a.prezzo_impianto:
+            RigaPreFattura.objects.create(
+                prefattura=pf,
+                tipo=TipoRiga.IMPIANTI,
+                descrizione=f"Impianti per nuovo artwork: {a}"[:250],
+                quantita=1,
+                prezzo_unitario=a.prezzo_impianto,
+            )
+        a.impianto_fatturato = True
+        a.save(update_fields=["impianto_fatturato"])
     return pf
 
 

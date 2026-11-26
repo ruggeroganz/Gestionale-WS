@@ -30,6 +30,12 @@
 <div>
   {% url 'nuovo' 'promemoria' as nuovo_promemoria %}
   {% include "ws/_promemoria.html" with mostra_contesto=True nuovo_url=nuovo_promemoria %}
+  {% if pagamenti or riordini or tds or fatture_diverse %}<div class="card"><div class="ch"><h2>Scadenze e controlli</h2></div><div class="tw"><table>
+  {% for f in pagamenti %}<tr><td><span class="badge {% if f.data_scadenza < oggi %}bad{% else %}warn{% endif %}">Pagamento</span></td><td><a href="{{ f.get_absolute_url }}">{{ f.numero_fattura|default:f.numero }}</a> · {{ f.cliente }}<div class="small muted">{{ f.totale|floatformat:"2g" }} €, scadenza {{ f.data_scadenza|date:"d/m/Y" }}: verificare l'incasso con l'amministrazione</div></td></tr>{% endfor %}
+  {% for r in riordini %}<tr><td><span class="badge {% if r.mancano < 0 %}bad{% else %}warn{% endif %}">Riordino</span></td><td><a href="{{ r.prodotto.get_absolute_url }}">{{ r.prodotto.codice }}</a> · {{ r.prodotto.cliente }}<div class="small muted">consegna prevista {{ r.prodotto.prossima_consegna|date:"d/m/Y" }}: l'ordine serve entro il {{ r.entro|date:"d/m/Y" }}, sollecitare il cliente</div></td></tr>{% endfor %}
+  {% for a in tds %}<tr><td><span class="badge warn">TDS</span></td><td><a href="{{ a.get_absolute_url }}">{{ a.nome }}</a> · {{ a.cliente }}<div class="small muted">richiesto il {{ a.data_tds_richiesto|date:"d/m/Y" }} e non ancora ricevuto: sollecitare il produttore</div></td></tr>{% endfor %}
+  {% for o in fatture_diverse %}<tr><td><span class="badge bad">Fattura</span></td><td><a href="{{ o.get_absolute_url }}">{{ o.numero }}</a> · {{ o.produttore }}<div class="small muted">fattura del produttore {{ o.importo_fattura_fornitore|floatformat:"2g" }} €, ordine {{ o.totale|floatformat:"2g" }} €: differenza {{ o.differenza_fattura|floatformat:"2g" }} €</div></td></tr>{% endfor %}
+  </table></div></div>{% endif %}
   <div class="card"><div class="ch"><h2>In attesa del cliente</h2></div>
   {% if quotazioni or campionature %}<div class="tw"><table><tr><th>Cosa</th><th>Progetto</th><th>Dal</th></tr>
   {% for q in quotazioni %}<tr><td>Quotazione n. {{ q.numero }}</td><td><a href="{{ q.progetto.get_absolute_url }}">{{ q.progetto.nome }}</a><div class="small muted">{{ q.progetto.cliente }}</div></td><td>{{ q.data|date:"d/m/Y" }}</td></tr>{% endfor %}

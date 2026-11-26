@@ -1,4 +1,4 @@
-{% extends "ws/base.html" %}
+{% extends base_template %}
 {% load humanize %}
 {% block title %}Pre-fattura {{ d.numero }}{% endblock %}
 {% block content %}
@@ -8,11 +8,12 @@
   <a class="btn sec" href="{% url 'nuovo' 'rigaprefattura' %}?prefattura={{ d.pk }}">+ Riga</a>
   <a class="btn" href="{% url 'prefattura_esporta' d.pk 'xml' %}">Scarica XML (FatturaPA)</a>
   <a class="btn sec" href="{% url 'prefattura_esporta' d.pk 'csv' %}">Scarica CSV</a>
-  <button class="btn sec" onclick="window.print()">Stampa</button>
+  <a class="btn" href="{% url 'pdf' 'prefattura' d.pk %}">Scarica PDF</a>
   <span class="badge {% if d.stato == 'registrata' %}ok{% elif d.stato == 'esportata' %}info{% endif %}">{{ d.get_stato_display }}</span>
 </div>
 {% if controlli %}<div class="alert noprint"><strong>Da completare prima dell'importazione:</strong><ul style="margin:4px 0 0;padding-left:18px">{% for c in controlli %}<li>{{ c }}</li>{% endfor %}</ul></div>{% endif %}
 {% if d.numero_fattura %}<div class="alert ok noprint">Registrata in contabilità come fattura n. {{ d.numero_fattura }}{% if d.data_fattura %} del {{ d.data_fattura|date:"d/m/Y" }}{% endif %}.</div>{% endif %}
+{% if d.pagata %}<div class="alert ok noprint">Pagamento ricevuto{% if d.data_pagamento %} il {{ d.data_pagamento|date:"d/m/Y" }}{% endif %}.</div>{% elif d.data_scadenza %}<div class="alert noprint">Pagamento atteso entro il {{ d.data_scadenza|date:"d/m/Y" }}: quando arriva, segnalo da «Modifica».</div>{% endif %}
 <div class="doc">
   <h1>Pre-fattura {{ d.numero }}</h1><div class="muted">del {{ d.data|date:"d/m/Y" }} · documento non valido ai fini fiscali{% if d.ordine %} · Ns. ordine {{ d.ordine.numero }}{% if d.ordine.riferimento_cliente %} · Vs. riferimento {{ d.ordine.riferimento_cliente }}{% endif %}{% endif %}{% if d.ddt %} · DDT {{ d.ddt.numero }} del {{ d.ddt.data|date:"d/m/Y" }}{% endif %}</div>
   <div class="parti"><div><h3>Emittente</h3><strong>{{ azienda.ragione_sociale }}</strong><br>{{ azienda.indirizzo }}<br>{{ azienda.cap }} {{ azienda.comune }} {{ azienda.provincia }}{% if azienda.partita_iva %}<br>P. IVA {{ azienda.partita_iva }}{% endif %}</div>

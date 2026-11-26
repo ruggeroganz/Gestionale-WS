@@ -40,6 +40,7 @@ urlpatterns = [
     path("prodotti/<int:pk>/riordino/", views.prodotto_riordino, name="prodotto_riordino"),
     path("promemoria/<int:pk>/fatto/", views.promemoria_fatto, name="promemoria_fatto"),
     path("cerca/", views.cerca, name="cerca"),
+    path("pdf/<str:tipo>/<int:pk>/", views.pdf, name="pdf"),
     path("nuovo/<str:modello>/", views.modifica, name="nuovo"),
     path("modifica/<str:modello>/<int:pk>/", views.modifica, name="modifica"),
     path("elimina/<str:modello>/<int:pk>/", views.elimina, name="elimina"),

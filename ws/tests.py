@@ -88,33 +88,72 @@ class FlussoProgettoTest(Base):
         flusso.avanza(p)
         self.assertEqual(p.fase, "stabilita")
         test = p.stabilita.get()  # avviata in automatico
-        self.assertEqual(test.versione_formula, self.v1)
         self.assertEqual(test.data_fine_prevista, oggi() + timedelta(days=90))
 
-        with self.assertRaises(flusso.FlussoError):
-            flusso.avanza(p)  # il packaging non parte senza stabilità superata
+        # durante la stabilità arrivano ordine e artwork, ma il packaging non parte finché non è superata
+        prodotto, _, _ = self.prodotto_con_bombola()
+        ordine = OrdineCliente.objects.create(cliente=self.cliente, progetto=p, produttore=self.produttore, stato="accettata")
+        RigaOrdine.objects.create(ordine=ordine, prodotto=prodotto, quantita=5000, prezzo_unitario="2.75")
+        mancanti = [c.testo for c in flusso.controlli(p) if not c.ok]
+        self.assertEqual(len(mancanti), 1)
+        self.assertIn("Stabilità", mancanti[0])
         test.esito = "superata"
         test.save()
         flusso.avanza(p)
         self.assertEqual(p.fase, "packaging")
-
-        with self.assertRaises(flusso.FlussoError):
-            flusso.avanza(p)
-        prodotto, _, _ = self.prodotto_con_bombola()
-        flusso.avanza(p)
-        self.assertEqual(p.fase, "ordine")
         self.cliente.refresh_from_db()
         self.assertEqual(self.cliente.stato, "attivo")
 
-        ordine = OrdineCliente.objects.create(cliente=self.cliente, progetto=p, produttore=self.produttore, stato="accettata")
-        RigaOrdine.objects.create(ordine=ordine, prodotto=prodotto, quantita=5000)
+        with self.assertRaises(flusso.FlussoError):
+            flusso.avanza(p)  # serve il campione di stampa approvato
+        p.campione_packaging = "approvato"
+        p.save()
         flusso.avanza(p)
+        self.assertEqual(p.fase, "produzione")
+
         with self.assertRaises(flusso.FlussoError):
             flusso.avanza(p)
-        ordine.stato = "consegnato"
+        ordine.stato = "pronto"
         ordine.save()
         flusso.avanza(p)
+        self.assertEqual(p.fase, "spedizione")
+
+        documenti.genera_ddt(ordine)
+        pf = documenti.genera_prefattura(ordine)
+        ordine.stato = "consegnato"
+        ordine.save()
+        self.assertEqual([c.ok for c in flusso.controlli(p)], [True, True, False, False])
+        pf.numero_fattura, pf.pagata = "12/2026", True
+        pf.save()
+        flusso.avanza(p)
         self.assertEqual((p.fase, p.stato), ("consegnato", "chiuso"))
+
+    def test_formula_esistente_salta_campionatura_e_stabilita(self):
+        p = self.progetto
+        p.produttore, p.fase, p.sviluppo = self.produttore, "quotazione", "esistente"
+        p.save()
+        Quotazione.objects.create(progetto=p, stato="accettata")
+        with self.assertRaises(flusso.FlussoError):
+            flusso.avanza(p)  # va indicata la formula esistente
+        p.versione_formula = self.v1
+        p.save()
+        flusso.avanza(p)
+        self.assertEqual(p.fase, "stabilita")  # la campionatura è saltata
+        self.assertFalse(p.stabilita.exists())  # e nessun test di stabilità parte
+        self.assertEqual(flusso.formula_approvata(p), self.v1)
+        testi = [c.testo for c in flusso.controlli(p)]
+        self.assertTrue(any("stabilità non richiesta" in t for t in testi))
+        self.assertEqual(len(flusso.planner(p)), 0)
+        p.data_consegna_richiesta = oggi() + timedelta(days=200)
+        self.assertEqual([t["nome"][:7] for t in flusso.planner(p)], ["Offerta", "Ordine ", "Campion", "Merce p"])
+
+    def test_tds_da_sollecitare(self):
+        a = Artwork.objects.create(cliente=self.cliente, progetto=self.progetto, nome="Lito", stato="attesa_tds", data_tds_richiesto=oggi() - timedelta(days=5))
+        self.assertFalse(any("TDS" in x for x in flusso.avvisi_progetto(self.progetto)))
+        a.data_tds_richiesto = oggi() - timedelta(days=20)
+        a.save()
+        self.assertTrue(any("sollecitare il produttore" in x for x in flusso.avvisi_progetto(self.progetto)))
+        self.assertIn(a, flusso.tds_da_sollecitare())
 
     def test_stabilita_fallita_riporta_in_campionatura(self):
         p = self.progetto
@@ -144,13 +183,30 @@ class FlussoProgettoTest(Base):
 
     def test_planner_a_ritroso(self):
         p = self.progetto
-        p.produttore = self.produttore
-        p.data_consegna_richiesta = oggi() + timedelta(days=100)  # meno di 150 + 90 giorni
+        p.lead_time_giorni = 120
+        p.data_consegna_richiesta = oggi() + timedelta(days=100)  # meno di 120 + 90 giorni
         p.save()
         tappe = flusso.planner(p)
         self.assertEqual(tappe[-1]["data"], p.data_consegna_richiesta)
-        self.assertEqual(tappe[1]["data"], p.data_consegna_richiesta - timedelta(days=240))
+        self.assertEqual(tappe[1]["data"], p.data_consegna_richiesta - timedelta(days=210))  # formula approvata
+        self.assertEqual(tappe[2]["data"], p.data_consegna_richiesta - timedelta(days=120))  # avvio packaging
         self.assertTrue(flusso.in_ritardo(p))
+
+    def test_prezzo_suggerito_e_margine_netto(self):
+        from decimal import Decimal as D
+
+        q = Quotazione.objects.create(progetto=self.progetto, commissione_pct=D("5"), margine_obiettivo_pct=D("25"))
+        r = q.righe.create(descrizione="Mousse", quantita=1000, costo_unitario=D("1.30"), costi_fissi=D("0.10"))
+        # (1,30 + 0,10) / (1 - 0,25 - 0,05) = 2,00: il prezzo lasciato a zero viene proposto
+        self.assertEqual(r.prezzo_unitario, D("2.000"))
+        self.assertEqual(r.commissione_unitaria, D("0.1"))
+        self.assertEqual(r.margine_unitario, D("0.5"))
+        self.assertEqual(r.margine_pct, 25)
+        self.assertEqual(q.margine_pct, 25)
+        r.prezzo_unitario = D("1.80")  # trattativa: si scende di prezzo
+        r.save()
+        self.assertEqual(r.prezzo_unitario, D("1.80"))
+        self.assertAlmostEqual(float(r.margine_pct), 17.22, places=2)
 
 
 class InciEMagazzinoTest(Base):
@@ -255,7 +311,7 @@ class PagineTest(TestCase):
         p = Progetto.objects.get(nome__startswith="Deodorante")
         q = p.quotazioni.get()
         url = reverse("modifica", args=["quotazione", q.pk]) + f"?next={p.get_absolute_url()}"
-        r = self.client.post(url, {"progetto": p.pk, "data": q.data.isoformat(), "stato": "accettata", "next": p.get_absolute_url()})
+        r = self.client.post(url, {"progetto": p.pk, "data": q.data.isoformat(), "stato": "accettata", "commissione_pct": "0", "next": p.get_absolute_url()})
         self.assertRedirects(r, p.get_absolute_url())
         self.assertTrue(p.eventi.filter(testo__contains="Accettata").exists())
         r = self.client.post(reverse("progetto_avanza", args=[p.pk]))
@@ -396,6 +452,7 @@ class RuoliTest(TestCase):
     def test_amministrazione_esporta_ma_non_avanza_i_progetti(self):
         self.accedi("amministrazione")
         pf = PreFattura.objects.get()
+        PreFattura.objects.update(stato="bozza")
         r = self.client.get(reverse("prefattura_esporta", args=[pf.pk, "xml"]))
         self.assertEqual(r.status_code, 200)
         self.assertIn(b"FatturaElettronica", r.content)
@@ -499,3 +556,70 @@ class ListinoRiordiniPromemoriaTest(TestCase):
         self.assertContains(r, "Lumière Beauty Srl")
         r = self.client.get(reverse("cerca") + "?q=LUM-MOU")
         self.assertContains(r, "Mousse volumizzante Lumière")
+
+
+class ImpiantiScadenzePdfTest(DocumentiTest):
+    def test_impianti_solo_al_primo_ordine_con_artwork_nuovo(self):
+        artwork = self.pack.artwork
+        artwork.costo_impianto, artwork.prezzo_impianto = "650", "800"
+        artwork.save()
+        oa = documenti.genera_ordine_acquisto(self.ordine)
+        pf = documenti.genera_prefattura(self.ordine)
+        self.assertEqual([(r.tipo, str(r.costo_unitario)) for r in oa.righe.all()][-1], ("impianti", "650.0000"))
+        self.assertEqual([(r.tipo, str(r.prezzo_unitario)) for r in pf.righe.all()][-1], ("impianti", "800.0000"))
+        flusso.registra_packaging(self.ordine)
+        riordino = OrdineCliente.objects.create(cliente=self.cliente, produttore=self.produttore)
+        RigaOrdine.objects.create(ordine=riordino, prodotto=self.prodotto, quantita=8000, prezzo_unitario="2.65")
+        self.assertEqual([r.tipo for r in documenti.genera_ordine_acquisto(riordino).righe.all()], ["prodotto"])
+        self.assertEqual([r.tipo for r in documenti.genera_prefattura(riordino).righe.all()], ["prodotto"])
+
+    def test_fattura_del_produttore_diversa_dall_ordine(self):
+        oa = documenti.genera_ordine_acquisto(self.ordine)
+        oa.importo_fattura_fornitore = oa.totale
+        oa.save()
+        self.assertIsNone(oa.differenza_fattura)
+        self.assertEqual(flusso.fatture_produttore_diverse(), [])
+        oa.importo_fattura_fornitore = oa.totale + 180
+        oa.save()
+        self.assertEqual(oa.differenza_fattura, 180)
+        self.assertEqual(flusso.fatture_produttore_diverse(), [oa])
+
+    def test_pagamenti_da_verificare(self):
+        pf = documenti.genera_prefattura(self.ordine)
+        self.assertNotIn(pf, flusso.pagamenti_da_verificare())  # senza scadenza
+        pf.data_scadenza = oggi() + timedelta(days=30)
+        pf.save()
+        self.assertNotIn(pf, flusso.pagamenti_da_verificare())
+        pf.data_scadenza = oggi() + timedelta(days=5)
+        pf.save()
+        self.assertIn(pf, flusso.pagamenti_da_verificare())
+        pf.pagata = True
+        pf.save()
+        self.assertNotIn(pf, flusso.pagamenti_da_verificare())
+
+    def test_riordini_da_sollecitare(self):
+        self.ordine.stato = "consegnato"
+        self.ordine.save()
+        self.prodotto.prossima_consegna = oggi() + timedelta(days=300)
+        self.prodotto.save()
+        self.assertEqual(flusso.riordini_da_sollecitare(), [])  # mancano più di 30 giorni al limite per ordinare
+        self.prodotto.prossima_consegna = oggi() + timedelta(days=160)
+        self.prodotto.save()
+        (r,) = flusso.riordini_da_sollecitare()
+        self.assertEqual((r["prodotto"], r["mancano"]), (self.prodotto, 10))
+        riordino = OrdineCliente.objects.create(cliente=self.cliente, produttore=self.produttore)
+        RigaOrdine.objects.create(ordine=riordino, prodotto=self.prodotto, quantita=1000)
+        self.assertEqual(flusso.riordini_da_sollecitare(), [])  # c'è già un ordine aperto
+
+    def test_pdf_su_carta_intestata(self):
+        U = get_user_model()
+        self.client.force_login(U.objects.create_user("x", password="x"))
+        q = Quotazione.objects.get(progetto=self.progetto)
+        documenti.genera_ddt(self.ordine)
+        casi = [("offerta", q), ("conferma", self.ordine), ("ddt", self.ordine.ddt.get()), ("prefattura", documenti.genera_prefattura(self.ordine)), ("acquisto", documenti.genera_ordine_acquisto(self.ordine))]
+        for tipo, obj in casi:
+            with self.subTest(tipo=tipo):
+                r = self.client.get(reverse("pdf", args=[tipo, obj.pk]))
+                self.assertEqual((r.status_code, r["Content-Type"]), (200, "application/pdf"))
+                self.assertTrue(r.content.startswith(b"%PDF"))
+                self.assertIn(".pdf", r["Content-Disposition"])

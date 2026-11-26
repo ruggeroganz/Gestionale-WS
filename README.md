@@ -68,21 +68,41 @@ degli allegati: di solito sono un'opzione dell'hosting.
 
 ### Il flusso del progetto
 
-Lead → Quotazione → Campionatura → Stabilità → Artwork e packaging → Ordine →
-Produzione → Consegnato. Si avanza solo quando le condizioni della fase sono
-soddisfatte:
+Brief → Offerta → Campionatura → Stabilità e artwork → Packaging in produzione →
+Produzione → Spedizione e fattura → Concluso. Si avanza solo quando le
+condizioni della fase sono soddisfatte:
 
-- **Quotazione**: serve una quotazione accettata dal cliente.
-- **Campionatura**: serve una campionatura approvata. Passando a Stabilità il
-  test (90 giorni) parte in automatico sulla formula approvata.
-- **Stabilità**: il packaging non parte finché la stabilità non è superata. Se
-  fallisce, il progetto torna in Campionatura e gli artwork con quell'INCI
-  vengono segnati «da rifare».
-- **Artwork e packaging**: artwork approvato con l'INCI della formula
-  approvata, prodotto con distinta base, quotazione accettata.
+- **Offerta**: serve una quotazione accettata dal cliente.
+- **Campionatura**: serve una campionatura approvata. Per una formula esistente
+  senza campionatura la fase viene saltata e si indica la formula sul progetto.
+- **Stabilità e artwork**: mentre corre la stabilità (90 giorni, solo per le
+  formule nuove, avviata in automatico) arrivano l'ordine del cliente, il TDS
+  dal produttore e l'artwork. Il packaging parte solo con stabilità superata,
+  ordine confermato, artwork definitivo approvato dal regolatorio e prodotto
+  con distinta base. Se la stabilità fallisce il progetto torna in
+  Campionatura e gli artwork con quell'INCI vengono segnati «da rifare».
+- **Packaging in produzione**: serve il campione di stampa approvato dal cliente.
+- **Produzione**: si esce quando il produttore comunica la merce pronta.
+- **Spedizione e fattura**: DDT, ordine spedito, fattura emessa, pagamento ricevuto.
 
-Il piano a ritroso calcola le scadenze dalla data di consegna richiesta (lead
-time del produttore, 150 giorni di default, più 90 di stabilità).
+Il piano a ritroso calcola le scadenze dalla data di consegna richiesta, con il
+lead time del packaging indicato sul progetto (150 giorni per le bombole, 120
+per flaconi e foamer) più i 90 giorni di stabilità quando serve.
+
+Il cruscotto raccoglie le scadenze: pagamenti da verificare, riordini da
+sollecitare al cliente (dalla «prossima consegna prevista» del prodotto, un
+lead time prima), TDS fermi da più di due settimane, fatture del produttore
+diverse dall'ordine d'acquisto.
+
+### Prezzi
+
+Ogni voce di quotazione ha costo del produttore, nostri costi fissi per pezzo e
+prezzo al cliente; la quotazione ha la commissione dell'agente e un margine
+obiettivo, entrambi in percentuale sul prezzo di vendita. Il prezzo suggerito è
+`(costo + costi fissi) / (1 − margine − commissione)`; il margine netto mostrato
+toglie dal prezzo costo, costi fissi e commissione. I costi d'impianto di un
+artwork nuovo entrano una sola volta nell'ordine al produttore e nella
+pre-fattura.
 
 ### La catena formula → INCI → artwork → packaging
 
@@ -109,6 +129,9 @@ Dall'ordine cliente si generano, già compilati e poi modificabili:
   accettata) più il packaging acquistato in eccedenza, da tenere in deposito.
   Sullo stesso ordine si annotano DDT e fattura ricevuti dal produttore.
 - **DDT** verso il cliente.
+- **PDF su carta intestata** per offerta, conferma d'ordine, ordine al
+  produttore, DDT e pre-fattura: logo e piè di pagina si impostano in «Dati
+  azienda».
 - **Pre-fattura**: prodotto finito più rifatturazione del packaging residuo.
   Non è una fattura: si scarica in **XML FatturaPA 1.2** (o in CSV) e si importa
   nel software di contabilità, che assegna il numero definitivo e la invia allo

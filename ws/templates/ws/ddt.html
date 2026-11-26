@@ -1,4 +1,4 @@
-{% extends "ws/base.html" %}
+{% extends base_template %}
 {% load humanize %}
 {% block title %}DDT {{ d.numero }}{% endblock %}
 {% block content %}
@@ -6,7 +6,7 @@
   {% if d.ordine %}<a class="btn sec" href="{{ d.ordine.get_absolute_url }}">← Ordine {{ d.ordine.numero }}</a>{% endif %}
   <a class="btn sec" href="{% url 'modifica' 'ddt' d.pk %}">Modifica dati di trasporto</a>
   <a class="btn sec" href="{% url 'nuovo' 'rigaddt' %}?ddt={{ d.pk }}">+ Riga</a>
-  <button class="btn" onclick="window.print()">Stampa / salva PDF</button>
+  <a class="btn" href="{% url 'pdf' 'ddt' d.pk %}">Scarica PDF</a>
 </div>
 <div class="doc">
   <h1>Documento di trasporto {{ d.numero }}</h1><div class="muted">del {{ d.data|date:"d/m/Y" }}{% if d.ordine %} · Ns. ordine {{ d.ordine.numero }}{% if d.ordine.riferimento_cliente %} · Vs. riferimento {{ d.ordine.riferimento_cliente }}{% endif %}{% endif %}</div>

@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>{% block title %}Documento{% endblock %}</title>
+<style>
+{% if font_url %}@font-face { font-family: "Inter"; src: url("{{ font_url }}"); font-weight: 100 900; }{% endif %}
+@page { size: A4; margin: 42mm 16mm 24mm; 
+  @top-left { content: element(testata); vertical-align: top; padding-top: 12mm; width: 100%; }
+  @bottom-left { content: element(piede); vertical-align: bottom; padding-bottom: 8mm; width: 100%; } }
+body { font: 9.5pt/1.45 "Inter", "Helvetica Neue", Arial, sans-serif; color: #161b2e; margin: 0; }
+.testata { position: running(testata); display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1.2pt solid #161b2e; padding-bottom: 5mm; }
+.testata img { max-height: 20mm; max-width: 60mm; }
+.testata .nome { white-space: nowrap; font-size: 16pt; font-weight: 700; letter-spacing: -.01em; }
+.testata .dati { text-align: right; font-size: 8pt; color: #454d66; line-height: 1.4; }
+.piede { position: running(piede); border-top: .6pt solid #c9cedc; padding-top: 2.5mm; font-size: 7.5pt; color: #6f7892; display: flex; justify-content: space-between; gap: 8mm; }
+.piede .pagina::after { content: "Pagina " counter(page) " di " counter(pages); white-space: nowrap; }
+.noprint, .msgs { display: none !important; }
+h1 { font-size: 17pt; margin: 0 0 1mm; letter-spacing: -.01em; }
+h3 { font-size: 7.5pt; text-transform: uppercase; letter-spacing: .06em; color: #6f7892; margin: 0 0 1.5mm; }
+p { margin: 0 0 2.5mm; }
+.muted { color: #6f7892; } .small { font-size: 8.5pt; }
+.parti { display: flex; gap: 10mm; margin: 7mm 0; } .parti > div { flex: 1; }
+table { width: 100%; border-collapse: collapse; margin-top: 2mm; }
+th, td { text-align: left; padding: 2.2mm 2mm; border-bottom: .5pt solid #dfe3ee; vertical-align: top; }
+th { font-size: 7.5pt; text-transform: uppercase; letter-spacing: .05em; color: #6f7892; border-bottom: .9pt solid #161b2e; }
+td.n, th.n { text-align: right; white-space: nowrap; }
+tr.tot td { font-weight: 700; border-bottom: .9pt solid #161b2e; }
+tr { break-inside: avoid; }
+.dl { display: grid; grid-template-columns: max-content 1fr; gap: 1mm 6mm; margin: 6mm 0 0; } .dl dt { color: #6f7892; } .dl dd { margin: 0; }
+.firma { display: flex; gap: 14mm; margin-top: 16mm; break-inside: avoid; } .firma div { flex: 1; border-top: .7pt solid #161b2e; padding-top: 1.5mm; font-size: 8.5pt; }
+.badge { font-weight: 600; }
+.solo-video { display: none; }
+</style>
+</head>
+<body>
+<div class="testata">
+  <div>{% if logo_url %}<img src="{{ logo_url }}" alt="{{ azienda.ragione_sociale }}">{% else %}<div class="nome">{{ azienda.ragione_sociale }}</div>{% endif %}</div>
+  <div class="dati">{% if logo_url %}<strong>{{ azienda.ragione_sociale }}</strong><br>{% endif %}{{ azienda.indirizzo }}{% if azienda.comune %}<br>{{ azienda.cap }} {{ azienda.comune }} {{ azienda.provincia }}{% endif %}{% if azienda.partita_iva %}<br>P. IVA {{ azienda.partita_iva }}{% endif %}{% if azienda.email or azienda.telefono %}<br>{{ azienda.email }}{% if azienda.email and azienda.telefono %} · {% endif %}{{ azienda.telefono }}{% endif %}</div>
+</div>
+<div class="piede"><span>{{ azienda.piede_documenti|default:azienda.ragione_sociale|linebreaksbr }}</span><span class="pagina"></span></div>
+{% block content %}{% endblock %}
+</body>
+</html>

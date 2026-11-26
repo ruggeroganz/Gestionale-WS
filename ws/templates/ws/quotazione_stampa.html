@@ -1,8 +1,8 @@
-{% extends "ws/base.html" %}
+{% extends base_template %}
 {% load humanize %}
 {% block title %}Offerta {{ q.progetto.codice }}/{{ q.numero }}{% endblock %}
 {% block content %}
-<div class="actions noprint" style="margin-bottom:14px"><a class="btn sec" href="{{ q.progetto.get_absolute_url }}">← Torna al progetto</a><a class="btn sec" href="{% url 'modifica' 'quotazione' q.pk %}?next={{ request.path }}">Modifica</a><button class="btn" onclick="window.print()">Stampa / salva PDF</button>
+<div class="actions noprint" style="margin-bottom:14px"><a class="btn sec" href="{{ q.progetto.get_absolute_url }}">← Torna al progetto</a><a class="btn sec" href="{% url 'modifica' 'quotazione' q.pk %}?next={{ request.path }}">Modifica</a><a class="btn" href="{% url 'pdf' 'offerta' q.pk %}">Scarica PDF</a>
   <span class="badge">{{ q.get_stato_display }}</span><span class="small muted">Nell'offerta compaiono solo i prezzi al cliente, non i costi.</span></div>
 <div class="doc">
   <h1>Offerta {{ q.progetto.codice }}/{{ q.numero }}</h1><div class="muted">del {{ q.data|date:"d/m/Y" }}{% if q.valida_fino %} · valida fino al {{ q.valida_fino|date:"d/m/Y" }}{% endif %}{% if q.numero > 1 %} · sostituisce le versioni precedenti{% endif %}</div>
@@ -12,7 +12,7 @@
   <table><tr><th>Descrizione</th><th class="n">Quantità</th><th class="n">Prezzo unitario</th><th class="n">Importo</th></tr>
   {% for r in righe %}<tr><td>{{ r.descrizione }}<div class="small muted">{{ r.get_tipo_display }}</div></td><td class="n">{{ r.quantita|intcomma }}</td><td class="n">{{ r.prezzo_unitario|prezzo }} €</td><td class="n">{{ r.totale_prezzo|floatformat:"2g" }} €</td></tr>{% endfor %}</table>
   <p class="small muted" style="margin-top:14px">Prezzi IVA esclusa. Se le voci sono scaglioni alternativi di quantità, vale quello corrispondente alla quantità ordinata.</p>
-  <p class="small">Tempi: la produzione parte dopo l'approvazione della formula e il superamento del test di stabilità (circa 90 giorni); dall'ordine definitivo la consegna è prevista in circa {{ q.progetto.produttore.lead_time_giorni|default:150 }} giorni. Il packaging acquistato oltre la quantità prodotta, per rispettare i lotti minimi, resta di proprietà del cliente e viene fatturato separatamente.</p>
+  <p class="small">Tempi: {% if q.progetto.sviluppo == 'nuova' %}dopo l'approvazione del campione la formula affronta il test di stabilità (circa 90 giorni); {% endif %}dall'artwork definitivo la merce è pronta in circa {{ q.progetto.lead_time_giorni }} giorni. Il packaging acquistato oltre la quantità prodotta, per rispettare i lotti minimi, resta di proprietà del cliente e viene fatturato separatamente{% if q.progetto.sviluppo == 'nuova' %}, come gli impianti per un nuovo artwork{% endif %}.</p>
   {% if q.note %}<p>{{ q.note|linebreaksbr }}</p>{% endif %}
   <div class="firma"><div>{{ azienda.ragione_sociale }}</div><div>Per accettazione — {{ q.progetto.cliente.ragione_sociale }}</div></div>
 </div>

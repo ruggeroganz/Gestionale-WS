@@ -1,4 +1,4 @@
-{% extends "ws/base.html" %}
+{% extends base_template %}
 {% load humanize %}
 {% block title %}Ordine d'acquisto {{ d.numero }}{% endblock %}
 {% block content %}
@@ -6,10 +6,11 @@
   {% if d.ordine %}<a class="btn sec" href="{{ d.ordine.get_absolute_url }}">← Ordine cliente {{ d.ordine.numero }}</a>{% endif %}
   <a class="btn sec" href="{% url 'modifica' 'acquisto' d.pk %}">Modifica / stato / fattura produttore</a>
   <a class="btn sec" href="{% url 'nuovo' 'rigaacquisto' %}?ordine_acquisto={{ d.pk }}">+ Riga</a>
-  <button class="btn" onclick="window.print()">Stampa / salva PDF</button>
+  <a class="btn" href="{% url 'pdf' 'acquisto' d.pk %}">Scarica PDF</a>
   <span class="badge info">{{ d.get_stato_display }}</span>
 </div>
 {% if d.ddt_fornitore or d.fattura_fornitore %}<div class="alert ok noprint">Dal produttore — DDT: {{ d.ddt_fornitore|default:"non registrato" }} · Fattura: {{ d.fattura_fornitore|default:"non registrata" }}{% if d.importo_fattura_fornitore %} ({{ d.importo_fattura_fornitore|floatformat:"2g" }} €){% endif %}</div>{% endif %}
+{% if d.differenza_fattura != None %}<div class="alert bad noprint"><strong>La fattura del produttore non combacia con l'ordine:</strong> fattura {{ d.importo_fattura_fornitore|floatformat:"2g" }} €, ordine {{ d.totale|floatformat:"2g" }} € (differenza {{ d.differenza_fattura|floatformat:"2g" }} €). Verificare con il produttore prima di pagare.</div>{% endif %}
 <div class="doc">
   <h1>Ordine d'acquisto {{ d.numero }}</h1><div class="muted">del {{ d.data|date:"d/m/Y" }}</div>
   <div class="parti"><div><h3>Committente</h3><strong>{{ azienda.ragione_sociale }}</strong><br>{{ azienda.indirizzo }}<br>{{ azienda.cap }} {{ azienda.comune }} {{ azienda.provincia }}{% if azienda.partita_iva %}<br>P. IVA {{ azienda.partita_iva }}{% endif %}</div>

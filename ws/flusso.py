@@ -45,15 +45,35 @@ def indice_fase(fase):
     return FASI.index(fase)
 
 
-def fase_successiva(fase):
-    i = indice_fase(fase)
-    return FASI[i + 1] if i + 1 < len(FASI) else None
+def fase_saltata(progetto, fase):
+    """Con una formula esistente senza campionatura si passa dall'offerta direttamente alla fase successiva."""
+    return fase == F.CAMPIONATURA and progetto.sviluppo == Progetto.Sviluppo.ESISTENTE
+
+
+def fase_successiva(progetto_o_fase, progetto=None):
+    """Fase che segue quella indicata (o quella corrente del progetto), saltando quelle non previste."""
+    if isinstance(progetto_o_fase, Progetto):
+        progetto, fase = progetto_o_fase, progetto_o_fase.fase
+    else:
+        fase = progetto_o_fase
+    i = indice_fase(fase) + 1
+    while i < len(FASI) and progetto is not None and fase_saltata(progetto, FASI[i]):
+        i += 1
+    return FASI[i] if i < len(FASI) else None
+
+
+def richiede_stabilita(progetto):
+    return progetto.sviluppo == Progetto.Sviluppo.NUOVA
 
 
 def formula_approvata(progetto):
-    """Versione della formula dell'ultima campionatura approvata dal cliente."""
+    """Formula su cui si lavora: quella dell'ultima campionatura approvata, o la formula esistente indicata."""
     c = progetto.campionature.filter(esito=Campionatura.Esito.APPROVATA).order_by("-numero").first()
-    return c.versione_formula if c else None
+    if c:
+        return c.versione_formula
+    if progetto.sviluppo != Progetto.Sviluppo.NUOVA:
+        return progetto.versione_formula
+    return None
 
 
 def quotazione_accettata(progetto):
@@ -66,6 +86,14 @@ def stabilita_superata(progetto, versione):
     ).exists()
 
 
+ORDINE_CONFERMATO = [
+    OrdineCliente.Stato.ACCETTATA,
+    OrdineCliente.Stato.IN_PRODUZIONE,
+    OrdineCliente.Stato.PRONTO,
+    OrdineCliente.Stato.CONSEGNATO,
+]
+
+
 def controlli(progetto):
     """Condizioni da soddisfare per uscire dalla fase corrente."""
     fase = progetto.fase
@@ -74,54 +102,69 @@ def controlli(progetto):
     if fase == F.LEAD:
         out.append(Controllo(progetto.produttore_id is not None, "Produttore assegnato al progetto"))
     elif fase == F.QUOTAZIONE:
-        out.append(Controllo(quotazione_accettata(progetto) is not None, "Quotazione accettata dal cliente"))
+        out.append(Controllo(quotazione_accettata(progetto) is not None, "Offerta accettata dal cliente"))
+        if progetto.sviluppo == Progetto.Sviluppo.ESISTENTE:
+            out.append(Controllo(va is not None, "Formula esistente indicata nei dati del progetto"))
     elif fase == F.CAMPIONATURA:
         out.append(Controllo(va is not None, "Campionatura approvata dal cliente"))
     elif fase == F.STABILITA:
+        if richiede_stabilita(progetto):
+            out.append(
+                Controllo(stabilita_superata(progetto, va), f"Stabilità superata sulla formula approvata ({va or 'nessuna'})")
+            )
+        else:
+            out.append(Controllo(va is not None, f"Formula esistente ({va or 'da indicare'}): stabilità non richiesta"))
         out.append(
             Controllo(
-                stabilita_superata(progetto, va),
-                f"Stabilità superata sulla formula approvata ({va or 'nessuna'})",
+                progetto.ordini.filter(stato__in=ORDINE_CONFERMATO).exists(),
+                "Ordine del cliente ricevuto e confermato",
             )
-        )
-    elif fase == F.PACKAGING:
-        out.append(
-            Controllo(stabilita_superata(progetto, va), f"Stabilità superata sulla formula approvata ({va or 'nessuna'})")
         )
         out.append(
             Controllo(
                 bool(va)
                 and progetto.artwork.filter(stato=Artwork.Stato.APPROVATO, versione_formula=va).exists(),
-                "Artwork approvato con l'INCI della formula approvata",
+                "Artwork definitivo (approvato dal regolatorio) con l'INCI della formula",
             )
         )
         out.append(
             Controllo(
                 bool(va)
                 and progetto.prodotti.filter(versione_formula=va, distinta__isnull=False).exists(),
-                "Prodotto (SKU) creato con distinta base e formula approvata",
+                "Prodotto (SKU) creato con distinta base e formula",
             )
         )
-        out.append(Controllo(quotazione_accettata(progetto) is not None, "Quotazione accettata dal cliente"))
-    elif fase == F.ORDINE:
+    elif fase == F.PACKAGING:
         out.append(
             Controllo(
-                progetto.ordini.filter(
-                    stato__in=[
-                        OrdineCliente.Stato.ACCETTATA,
-                        OrdineCliente.Stato.IN_PRODUZIONE,
-                        OrdineCliente.Stato.CONSEGNATO,
-                    ]
-                ).exists(),
-                "Conferma d'ordine accettata dal cliente",
+                progetto.campione_packaging == Progetto.CampionePackaging.APPROVATO,
+                "Campione di stampa del packaging approvato dal cliente",
             )
         )
     elif fase == F.PRODUZIONE:
         out.append(
             Controllo(
-                progetto.ordini.filter(stato=OrdineCliente.Stato.CONSEGNATO).exists(), "Ordine consegnato al cliente"
+                progetto.ordini.filter(stato__in=[OrdineCliente.Stato.PRONTO, OrdineCliente.Stato.CONSEGNATO]).exists(),
+                "Merce pronta comunicata dal produttore (stato dell'ordine)",
             )
         )
+    elif fase == F.SPEDIZIONE:
+        from .models import DDT, PreFattura
+
+        fatture = PreFattura.objects.filter(ordine__progetto=progetto)
+        out.append(Controllo(DDT.objects.filter(ordine__progetto=progetto).exists(), "DDT emesso"))
+        out.append(
+            Controllo(
+                progetto.ordini.filter(stato=OrdineCliente.Stato.CONSEGNATO).exists(), "Ordine spedito al cliente"
+            )
+        )
+        out.append(
+            Controllo(
+                fatture.exists() and not fatture.filter(numero_fattura="").exists(),
+                "Fattura emessa (numero definitivo riportato sulla pre-fattura)",
+            )
+        )
+        out.append(Controllo(fatture.exists() and not fatture.filter(pagata=False).exists(), "Pagamento ricevuto"))
     return out
 
 
@@ -130,7 +173,7 @@ def avanza(progetto, utente=None):
     mancanti = [c.testo for c in controlli(progetto) if not c.ok]
     if mancanti:
         raise FlussoError("Non si può avanzare: " + "; ".join(mancanti))
-    nuova = fase_successiva(progetto.fase)
+    nuova = fase_successiva(progetto)
     if nuova is None:
         raise FlussoError("Il progetto è già nell'ultima fase.")
     vecchia = progetto.get_fase_display()
@@ -139,12 +182,12 @@ def avanza(progetto, utente=None):
         progetto.stato = Progetto.Stato.CHIUSO
     progetto.save()
     testo = f"Fase: {vecchia} → {progetto.get_fase_display()}"
-    if nuova == F.STABILITA:
+    if nuova == F.STABILITA and richiede_stabilita(progetto):
         va = formula_approvata(progetto)
         if not progetto.stabilita.filter(versione_formula=va).exclude(esito=TestStabilita.Esito.FALLITA).exists():
             t = TestStabilita.objects.create(progetto=progetto, versione_formula=va)
             testo += f". Avviata stabilità su {va}, fine prevista {t.data_fine_prevista:%d/%m/%Y}"
-    if nuova == F.ORDINE and progetto.cliente.stato == Cliente.Stato.POTENZIALE:
+    if nuova == F.PACKAGING and progetto.cliente.stato == Cliente.Stato.POTENZIALE:
         progetto.cliente.stato = Cliente.Stato.ATTIVO
         progetto.cliente.save(update_fields=["stato"])
     Evento.objects.create(progetto=progetto, utente=utente, testo=testo, automatico=True)
@@ -207,11 +250,7 @@ def dopo_salvataggio(obj, utente=None, creato=False):
         if prec and not obj.stesso_inci(prec):
             extra.append(f"INCI diverso da v{prec.numero}: verificare artwork, quotazione e giacenze di packaging")
 
-    if isinstance(obj, OrdineCliente) and obj.stato in (
-        OrdineCliente.Stato.ACCETTATA,
-        OrdineCliente.Stato.IN_PRODUZIONE,
-        OrdineCliente.Stato.CONSEGNATO,
-    ):
+    if isinstance(obj, OrdineCliente) and obj.stato in ORDINE_CONFERMATO:
         if obj.cliente.stato == Cliente.Stato.POTENZIALE:
             obj.cliente.stato = Cliente.Stato.ATTIVO
             obj.cliente.save(update_fields=["stato"])
@@ -228,26 +267,39 @@ def dopo_salvataggio(obj, utente=None, creato=False):
 
 
 # --------------------------------------------------------------------------
-# Planner a ritroso
+# Planner a ritroso e scadenze
 # --------------------------------------------------------------------------
+GIORNI_SOLLECITO_TDS = 14
+GIORNI_CAMPIONE_STAMPA = 105  # il campione di stampa arriva dopo 3-4 mesi dall'avvio del packaging
+GIORNI_PREAVVISO_RIORDINO = 30
+
+
 def planner(progetto):
     """Scadenze calcolate a ritroso dalla data di consegna richiesta."""
     consegna = progetto.data_consegna_richiesta
     if not consegna:
         return []
-    lead = progetto.produttore.lead_time_giorni if progetto.produttore_id else 150
-    t_ordine = consegna - timedelta(days=lead)
-    t_formula = t_ordine - timedelta(days=GIORNI_STABILITA)
-    t_camp = t_formula - timedelta(days=GIORNI_CAMPIONATURA)
-    t_quot = t_camp - timedelta(days=GIORNI_QUOTAZIONE)
+    lead = progetto.lead_time_giorni
+    t_packaging = consegna - timedelta(days=lead)
     i = indice_fase(progetto.fase)
-    tappe = [
-        ("Quotazione accettata, avvio campionature", t_quot, i > indice_fase(F.QUOTAZIONE)),
-        ("Formula approvata e avvio stabilità", t_formula, i > indice_fase(F.CAMPIONATURA)),
-        (f"Stabilità superata ({GIORNI_STABILITA} gg)", t_ordine, i > indice_fase(F.STABILITA)),
-        (f"Ordine definitivo e avvio packaging (lead time {lead} gg)", t_ordine, i > indice_fase(F.ORDINE)),
-        ("Consegna richiesta dal cliente", consegna, i >= indice_fase(F.CONSEGNATO)),
-    ]
+    tappe = []
+    t_formula = t_packaging
+    if richiede_stabilita(progetto):
+        t_formula = t_packaging - timedelta(days=GIORNI_STABILITA)
+    if progetto.sviluppo != Progetto.Sviluppo.ESISTENTE:
+        t_offerta = t_formula - timedelta(days=GIORNI_CAMPIONATURA)
+        tappe.append(("Offerta accettata, avvio campionature", t_offerta, i > indice_fase(F.QUOTAZIONE)))
+        nome = "Formula approvata e avvio stabilità" if richiede_stabilita(progetto) else "Campionatura approvata"
+        tappe.append((nome, t_formula, i > indice_fase(F.CAMPIONATURA)))
+    else:
+        tappe.append(("Offerta accettata", t_packaging - timedelta(days=GIORNI_QUOTAZIONE), i > indice_fase(F.QUOTAZIONE)))
+    cosa = "Stabilità superata, ordine" if richiede_stabilita(progetto) else "Ordine"
+    tappe.append(
+        (f"{cosa} e artwork definitivo: avvio packaging (lead time {lead} gg)", t_packaging, i > indice_fase(F.STABILITA))
+    )
+    t_campione = min(consegna, t_packaging + timedelta(days=GIORNI_CAMPIONE_STAMPA))
+    tappe.append(("Campione di stampa approvato dal cliente", t_campione, i > indice_fase(F.PACKAGING)))
+    tappe.append(("Merce pronta, consegna richiesta dal cliente", consegna, i > indice_fase(F.PRODUZIONE)))
     today = oggi()
     return [
         {"nome": nome, "data": data, "fatto": fatto, "in_ritardo": not fatto and data < today}
@@ -259,13 +311,23 @@ def in_ritardo(progetto):
     return any(t["in_ritardo"] for t in planner(progetto))
 
 
+def tds_da_sollecitare(progetto=None):
+    """Artwork fermi in attesa del TDS da più di due settimane."""
+    qs = Artwork.objects.filter(
+        stato=Artwork.Stato.ATTESA_TDS,
+        data_tds_richiesto__isnull=False,
+        data_tds_richiesto__lte=oggi() - timedelta(days=GIORNI_SOLLECITO_TDS),
+    ).select_related("progetto", "cliente")
+    return qs.filter(progetto=progetto) if progetto is not None else qs.exclude(progetto__stato=Progetto.Stato.CHIUSO)
+
+
 def avvisi_progetto(progetto):
     out = []
     va = formula_approvata(progetto)
     q = quotazione_accettata(progetto)
     if va and q and q.versione_formula_id and q.versione_formula_id != va.pk:
         out.append(
-            f"La quotazione accettata è riferita a {q.versione_formula}, ma la formula approvata è {va}: "
+            f"L'offerta accettata è riferita a {q.versione_formula}, ma la formula approvata è {va}: "
             "verificare se il prezzo va aggiornato."
         )
     for t in progetto.stabilita.all():
@@ -273,11 +335,52 @@ def avvisi_progetto(progetto):
             out.append(f"Stabilità su {t.versione_formula} terminata il {t.data_fine_prevista:%d/%m/%Y}: registrare l'esito.")
     for a in progetto.artwork.filter(stato=Artwork.Stato.DA_RIFARE):
         out.append(f"Artwork «{a}» da rifare: l'INCI riportato non è più valido.")
+    for a in tds_da_sollecitare(progetto):
+        giorni = (oggi() - a.data_tds_richiesto).days
+        out.append(f"TDS per «{a.nome}» richiesto {giorni} giorni fa e non ancora ricevuto: sollecitare il produttore.")
     for t in planner(progetto):
         if t["in_ritardo"]:
             out.append(f"In ritardo sul piano: «{t['nome']}» era prevista entro il {t['data']:%d/%m/%Y}.")
             break
     return out
+
+
+def pagamenti_da_verificare(giorni=7):
+    """Pre-fatture non ancora pagate con scadenza passata o entro pochi giorni."""
+    from .models import PreFattura
+
+    return (
+        PreFattura.objects.filter(pagata=False, data_scadenza__isnull=False, data_scadenza__lte=oggi() + timedelta(days=giorni))
+        .select_related("cliente")
+        .order_by("data_scadenza")
+    )
+
+
+def riordini_da_sollecitare():
+    """Prodotti con una consegna prevista e nessun ordine aperto: l'ordine serve un lead time prima."""
+    aperti = [s for s in OrdineCliente.Stato.values if s not in ("consegnato", "annullato")]
+    out = []
+    prodotti = Prodotto.objects.filter(attivo=True, prossima_consegna__isnull=False).select_related("cliente", "progetto")
+    for p in prodotti.exclude(righe_ordine__ordine__stato__in=aperti).distinct():
+        lead = p.progetto.lead_time_giorni if p.progetto_id else 150
+        entro = p.prossima_consegna - timedelta(days=lead)
+        mancano = (entro - oggi()).days
+        if mancano <= GIORNI_PREAVVISO_RIORDINO:
+            out.append({"prodotto": p, "entro": entro, "mancano": mancano})
+    out.sort(key=lambda r: r["entro"])
+    return out
+
+
+def fatture_produttore_diverse():
+    from .models import OrdineAcquisto
+
+    return [
+        oa
+        for oa in OrdineAcquisto.objects.filter(importo_fattura_fornitore__isnull=False)
+        .select_related("produttore")
+        .prefetch_related("righe")
+        if oa.differenza_fattura is not None
+    ]
 
 
 # --------------------------------------------------------------------------

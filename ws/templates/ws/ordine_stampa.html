@@ -1,8 +1,8 @@
-{% extends "ws/base.html" %}
+{% extends base_template %}
 {% load humanize %}
 {% block title %}Conferma d'ordine {{ o.numero }}{% endblock %}
 {% block content %}
-<div class="actions noprint" style="margin-bottom:14px"><a class="btn sec" href="{{ o.get_absolute_url }}">← Torna all'ordine</a><button class="btn" onclick="window.print()">Stampa / salva PDF</button></div>
+<div class="actions noprint" style="margin-bottom:14px"><a class="btn sec" href="{{ o.get_absolute_url }}">← Torna all'ordine</a><a class="btn" href="{% url 'pdf' 'conferma' o.pk %}">Scarica PDF</a></div>
 <div class="doc">
   <h1>Conferma d'ordine {{ o.numero }}</h1><div class="muted">del {{ o.data|date:"d/m/Y" }}{% if o.riferimento_cliente %} · Vs. riferimento {{ o.riferimento_cliente }}{% endif %}</div>
   <div class="parti"><div><h3>Fornitore</h3><strong>{{ NOME_AZIENDA }}</strong></div>

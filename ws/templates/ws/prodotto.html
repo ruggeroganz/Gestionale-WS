@@ -2,7 +2,7 @@
 {% load humanize %}
 {% block title %}{{ p.codice }}{% endblock %}
 {% block content %}
-<div class="head"><div><h1>{{ p.nome }}</h1><div class="sub">{{ p.codice }} · <a href="{{ p.cliente.get_absolute_url }}">{{ p.cliente }}</a>{% if p.formato %} · {{ p.formato }}{% endif %}{% if p.progetto %} · progetto <a href="{{ p.progetto.get_absolute_url }}">{{ p.progetto.codice }}</a>{% endif %}</div></div>
+<div class="head"><div><h1>{{ p.nome }}</h1><div class="sub">{{ p.codice }} · <a href="{{ p.cliente.get_absolute_url }}">{{ p.cliente }}</a>{% if p.formato %} · {{ p.formato }}{% endif %}{% if p.prossima_consegna %} · prossima consegna prevista {{ p.prossima_consegna|date:"d/m/Y" }}{% endif %}{% if p.progetto %} · progetto <a href="{{ p.progetto.get_absolute_url }}">{{ p.progetto.codice }}</a>{% endif %}</div></div>
   <div class="actions"><a class="btn sec" href="{% url 'modifica' 'prodotto' p.pk %}">Modifica / cambia formula</a>
     <form class="inline" method="post" action="{% url 'prodotto_riordino' p.pk %}">{% csrf_token %}<button class="btn">+ Riordino</button></form></div></div>
 

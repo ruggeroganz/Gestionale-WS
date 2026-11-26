@@ -47,29 +47,29 @@ CRUD = {
     "cliente": (Cliente, ["ragione_sociale", "tipo", "stato", "partita_iva", "codice_fiscale", "indirizzo", "cap", "comune", "provincia", "codice_paese", "paese", "codice_sdi", "pec", "pagamento", "email", "telefono", "commerciale", "note"]),
     "contatto": (Contatto, ["cliente", "nome", "ruolo", "email", "telefono"]),
     "produttore": (Produttore, ["nome", "paese", "indirizzo", "partita_iva", "lead_time_giorni", "email", "telefono", "note"]),
-    "progetto": (Progetto, ["nome", "cliente", "produttore", "tipo_prodotto", "responsabile", "quantita_prevista", "prezzo_target", "data_consegna_richiesta", "stato", "brief"]),
+    "progetto": (Progetto, ["nome", "cliente", "produttore", "tipo_prodotto", "sviluppo", "versione_formula", "responsabile", "quantita_prevista", "prezzo_target", "data_consegna_richiesta", "lead_time_giorni", "campione_packaging", "stato", "brief"]),
     "formula": (Formula, ["codice", "nome", "produttore", "progetto", "categoria"]),
     "versioneformula": (VersioneFormula, ["formula", "inci", "modifiche", "data"]),
     "campionatura": (Campionatura, ["progetto", "versione_formula", "data_invio", "esito", "feedback", "data_feedback"]),
     "stabilita": (TestStabilita, ["progetto", "versione_formula", "data_inizio", "durata_giorni", "esito", "data_esito", "note"]),
-    "quotazione": (Quotazione, ["progetto", "versione_formula", "data", "valida_fino", "stato", "motivo", "note"]),
-    "rigaquotazione": (RigaQuotazione, ["quotazione", "tipo", "descrizione", "quantita", "costo_unitario", "prezzo_unitario"]),
+    "quotazione": (Quotazione, ["progetto", "versione_formula", "data", "valida_fino", "commissione_pct", "margine_obiettivo_pct", "stato", "motivo", "note"]),
+    "rigaquotazione": (RigaQuotazione, ["quotazione", "tipo", "descrizione", "quantita", "costo_unitario", "costi_fissi", "prezzo_unitario"]),
     "componente": (Componente, ["codice", "tipo", "descrizione", "materiale", "formato", "note"]),
-    "artwork": (Artwork, ["cliente", "progetto", "nome", "versione_formula", "stato", "file", "data_approvazione", "note"]),
+    "artwork": (Artwork, ["cliente", "progetto", "nome", "versione_formula", "stato", "data_tds_richiesto", "data_tds_ricevuto", "file_tds", "file", "data_approvazione", "costo_impianto", "prezzo_impianto", "impianto_ordinato", "impianto_fatturato", "note"]),
     "packaging": (Packaging, ["cliente", "componente", "descrizione", "decorazione", "colore", "artwork", "riporta_inci", "moq", "costo_unitario", "prezzo_unitario", "note"]),
-    "prodotto": (Prodotto, ["codice", "nome", "cliente", "progetto", "versione_formula", "formato", "attivo"]),
+    "prodotto": (Prodotto, ["codice", "nome", "cliente", "progetto", "versione_formula", "formato", "prossima_consegna", "attivo"]),
     "rigadistinta": (RigaDistinta, ["prodotto", "packaging", "quantita_per_pezzo", "etichetta_correttiva"]),
     "movimento": (MovimentoPackaging, ["packaging", "produttore", "data", "tipo", "quantita", "note"]),
     "ordine": (OrdineCliente, ["cliente", "progetto", "produttore", "data", "data_consegna_prevista", "stato", "riferimento_cliente", "note"]),
     "rigaordine": (RigaOrdine, ["ordine", "prodotto", "quantita", "prezzo_unitario"]),
     "vocelistino": (VoceListino, ["produttore", "formula", "tipo", "descrizione", "quantita_minima", "costo_unitario", "prezzo_unitario", "valido_dal", "valido_fino", "note"]),
     "promemoria": (Promemoria, ["testo", "scadenza", "cliente", "progetto", "assegnato_a", "fatto"]),
-    "azienda": (Azienda, ["ragione_sociale", "partita_iva", "codice_fiscale", "regime_fiscale", "indirizzo", "cap", "comune", "provincia", "codice_paese", "iban", "email", "telefono"]),
+    "azienda": (Azienda, ["ragione_sociale", "partita_iva", "codice_fiscale", "regime_fiscale", "indirizzo", "cap", "comune", "provincia", "codice_paese", "iban", "email", "telefono", "logo", "piede_documenti"]),
     "acquisto": (OrdineAcquisto, ["produttore", "ordine", "data", "data_consegna_richiesta", "stato", "ddt_fornitore", "fattura_fornitore", "importo_fattura_fornitore", "note"]),
     "rigaacquisto": (RigaAcquisto, ["ordine_acquisto", "tipo", "descrizione", "quantita", "costo_unitario"]),
     "ddt": (DDT, ["cliente", "ordine", "data", "luogo_partenza", "destinazione", "causale", "vettore", "porto", "colli", "peso_kg", "aspetto", "note"]),
     "rigaddt": (RigaDDT, ["ddt", "codice", "descrizione", "quantita", "lotto"]),
-    "prefattura": (PreFattura, ["cliente", "ordine", "ddt", "data", "aliquota_iva", "natura", "pagamento", "data_scadenza", "stato", "numero_fattura", "data_fattura", "note"]),
+    "prefattura": (PreFattura, ["cliente", "ordine", "ddt", "data", "aliquota_iva", "natura", "pagamento", "data_scadenza", "stato", "numero_fattura", "data_fattura", "pagata", "data_pagamento", "note"]),
     "rigaprefattura": (RigaPreFattura, ["prefattura", "tipo", "codice", "descrizione", "quantita", "prezzo_unitario"]),
 }
 
@@ -236,6 +236,11 @@ def dashboard(request):
             ).select_related("progetto__cliente", "versione_formula__formula"),
             "eventi": Evento.objects.select_related("progetto", "utente")[:12],
             "promemoria": Promemoria.objects.filter(fatto=False).select_related("cliente", "progetto", "assegnato_a")[:30],
+            "pagamenti": flusso.pagamenti_da_verificare(),
+            "riordini": flusso.riordini_da_sollecitare(),
+            "tds": flusso.tds_da_sollecitare(),
+            "fatture_diverse": flusso.fatture_produttore_diverse(),
+            "oggi": flusso.oggi(),
         },
     )
 
@@ -265,8 +270,9 @@ def progetto(request, pk):
     fasi = [
         {"valore": v, "nome": n, "stato": "fatta" if k < i else "corrente" if k == i else "futura"}
         for k, (v, n) in enumerate(Progetto.Fase.choices)
+        if not flusso.fase_saltata(p, v)
     ]
-    succ = flusso.fase_successiva(p.fase)
+    succ = flusso.fase_successiva(p)
     return render(
         request,
         "ws/progetto.html",
@@ -274,7 +280,8 @@ def progetto(request, pk):
             "p": p,
             "pk_testo": str(p.pk),
             "fasi": fasi,
-            "fasi_precedenti": fasi[:i],
+            "fasi_precedenti": [f for f in fasi if f["stato"] == "fatta"],
+            "richiede_stabilita": flusso.richiede_stabilita(p),
             "controlli": controlli,
             "puo_avanzare": succ is not None and all(c.ok for c in controlli),
             "fase_successiva": Progetto.Fase(succ).label if succ else None,
@@ -693,3 +700,52 @@ def cerca(request):
         gruppi = [(nome, list(qs[:15])) for nome, qs in ricerche]
         gruppi = [g for g in gruppi if g[1]]
     return render(request, "ws/cerca.html", {"q": q, "gruppi": gruppi})
+
+
+# --------------------------------------------------------------------------
+# PDF su carta intestata
+# --------------------------------------------------------------------------
+DOCUMENTI_PDF = {
+    "offerta": (Quotazione, "ws/quotazione_stampa.html", "q", lambda o: f"Offerta {o.progetto.codice}-{o.numero}"),
+    "conferma": (OrdineCliente, "ws/ordine_stampa.html", "o", lambda o: f"Conferma d'ordine {o.numero}"),
+    "ddt": (DDT, "ws/ddt.html", "d", lambda o: f"DDT {o.numero}"),
+    "prefattura": (PreFattura, "ws/prefattura.html", "d", lambda o: f"Pre-fattura {o.numero}"),
+    "acquisto": (OrdineAcquisto, "ws/acquisto.html", "d", lambda o: f"Ordine d'acquisto {o.numero}"),
+}
+
+
+def crea_pdf(request, tipo, obj):
+    """Restituisce (nome file, bytes) del documento impaginato sulla carta intestata."""
+    from django.contrib.staticfiles import finders
+    from django.template.loader import render_to_string
+    from weasyprint import HTML
+
+    _, template, variabile, nome = DOCUMENTI_PDF[tipo]
+    az = Azienda.corrente()
+    font = finders.find("ws/font/inter-latin-wght-normal.woff2")
+    html = render_to_string(
+        template,
+        {
+            variabile: obj,
+            "righe": obj.righe.all(),
+            "azienda": az,
+            "base_template": "ws/pdf_base.html",
+            "logo_url": f"file://{az.logo.path}" if az.pk and az.logo else "",
+            "font_url": f"file://{font}" if font else "",
+        },
+        request=request,
+    )
+    return f"{nome(obj)}.pdf", HTML(string=html).write_pdf()
+
+
+@login_required
+def pdf(request, tipo, pk):
+    from django.http import HttpResponse
+
+    if tipo not in DOCUMENTI_PDF:
+        raise Http404
+    obj = get_object_or_404(DOCUMENTI_PDF[tipo][0], pk=pk)
+    nome, contenuto = crea_pdf(request, tipo, obj)
+    risposta = HttpResponse(contenuto, content_type="application/pdf")
+    risposta["Content-Disposition"] = f'inline; filename="{nome}"'
+    return risposta

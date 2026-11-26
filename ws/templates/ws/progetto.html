@@ -19,18 +19,19 @@
       <strong>Versione {{ q.numero }}</strong> · {{ q.data|date:"d/m/Y" }}
       <span class="badge {% if q.stato == 'accettata' %}ok{% elif q.stato == 'inviata' %}info{% elif q.stato == 'rifiutata' %}bad{% endif %}">{{ q.get_stato_display }}</span>
       {% if q.versione_formula %}<span class="badge">{{ q.versione_formula }}</span>{% endif %}
-      {% if q.margine_pct != None %}<span class="muted small">margine {{ q.margine_pct|floatformat:1 }}%</span>{% endif %}
+      {% if q.margine_pct != None %}<span class="muted small">margine netto {{ q.margine_pct|floatformat:1 }}%{% if q.commissione_pct %} · commissione agente {{ q.commissione_pct|floatformat:"-2" }}%{% endif %}{% if q.margine_obiettivo_pct != None %} · obiettivo {{ q.margine_obiettivo_pct|floatformat:"-2" }}%{% endif %}</span>{% endif %}
       <span class="adx"><a href="{% url 'quotazione_stampa' q.pk %}">offerta</a> · <a href="{% url 'modifica' 'quotazione' q.pk %}?next={{ request.path }}">modifica</a> ·
         <form class="inline" method="post" action="{% url 'quotazione_duplica' q.pk %}">{% csrf_token %}<button class="link">nuova versione</button></form></span>
       {% if q.motivo %}<div class="small muted">Motivo revisione: {{ q.motivo }}</div>{% endif %}
     </div>
-    <div class="tw"><table class="fitta"><tr><th style="min-width:210px">Voce</th><th class="n">Q.tà</th><th class="n">Costo</th><th class="n">Prezzo</th><th class="n">Marg.</th><th class="n">Totale</th><th></th></tr>
-    {% for r in q.righe.all %}<tr><td>{{ r.descrizione }}<div class="small muted">{{ r.get_tipo_display }}</div></td><td class="n">{{ r.quantita|intcomma }}</td><td class="n">{{ r.costo_unitario|prezzo }} €</td><td class="n">{{ r.prezzo_unitario|prezzo }} €</td>
-      <td class="n">{% if r.margine_pct != None %}{{ r.margine_pct|floatformat:1 }}%{% endif %}</td><td class="n">{{ r.totale_prezzo|floatformat:"2g" }} €</td>
+    <div class="tw"><table class="fitta"><tr><th style="min-width:160px">Voce</th><th class="n">Q.tà</th><th class="n">Costo</th><th class="n">Fissi</th><th class="n">Prezzo</th><th class="n">Marg. netto</th><th class="n">Totale</th><th></th></tr>
+    {% for r in q.righe.all %}<tr><td>{{ r.descrizione }}<div class="small muted">{{ r.get_tipo_display }}</div></td><td class="n">{{ r.quantita|intcomma }}</td><td class="n">{{ r.costo_unitario|prezzo }} €</td><td class="n">{% if r.costi_fissi %}{{ r.costi_fissi|prezzo }} €{% else %}<span class="muted">—</span>{% endif %}</td>
+      <td class="n"><strong>{{ r.prezzo_unitario|prezzo }} €</strong>{% if r.prezzo_suggerito and r.prezzo_suggerito != r.prezzo_unitario %}<div class="small muted">suggerito {{ r.prezzo_suggerito|prezzo }}</div>{% endif %}</td>
+      <td class="n">{% if r.margine_pct != None %}{{ r.margine_pct|floatformat:1 }}%<div class="small muted">{{ r.margine_unitario|prezzo }} €/pz</div>{% endif %}</td><td class="n">{{ r.totale_prezzo|floatformat:"2g" }} €</td>
       <td class="act"><a href="{% url 'modifica' 'rigaquotazione' r.pk %}?next={{ request.path }}">modifica</a></td></tr>{% endfor %}
-    <tr class="tot"><td colspan="5"><a class="small" style="font-weight:400" href="{% url 'nuovo' 'rigaquotazione' %}?quotazione={{ q.pk }}&next={{ request.path }}">+ aggiungi voce</a> <span class="small muted" style="font-weight:400">·</span> <a class="small" style="font-weight:400" href="{% url 'listino' %}?quotazione={{ q.pk }}">+ dal listino</a></td><td class="n">{{ q.totale_prezzo|floatformat:"2g" }} €</td><td></td></tr>
+    <tr class="tot"><td colspan="6"><a class="small" style="font-weight:400" href="{% url 'nuovo' 'rigaquotazione' %}?quotazione={{ q.pk }}&next={{ request.path }}">+ aggiungi voce</a> <span class="small muted" style="font-weight:400">·</span> <a class="small" style="font-weight:400" href="{% url 'listino' %}?quotazione={{ q.pk }}">+ dal listino</a></td><td class="n">{{ q.totale_prezzo|floatformat:"2g" }} €</td><td></td></tr>
     </table></div>
-  {% empty %}<div class="empty">Nessuna quotazione. Inserisci il costo ricevuto dal produttore e il prezzo per il cliente.</div>{% endfor %}
+  {% empty %}<div class="empty">Nessuna quotazione. Inserisci il costo ricevuto dal produttore, la commissione dell'agente e il margine obiettivo: il prezzo per il cliente viene suggerito.</div>{% endfor %}
   </div>
 
   {# ---------------- Formule ---------------- #}
@@ -60,17 +61,19 @@
   {% for t in stabilita %}<tr><td>{{ t.versione_formula }}</td><td>{{ t.data_inizio|date:"d/m/Y" }}</td><td>{{ t.data_fine_prevista|date:"d/m/Y" }}{% if t.esito == 'in_corso' and not t.scaduta %}<div class="small muted">tra {{ t.giorni_rimanenti }} giorni</div>{% endif %}</td>
     <td><span class="badge {% if t.esito == 'superata' %}ok{% elif t.esito == 'fallita' %}bad{% elif t.scaduta %}warn{% else %}info{% endif %}">{{ t.get_esito_display }}{% if t.scaduta %} · esito da registrare{% endif %}</span></td>
     <td class="small">{{ t.note }}</td><td class="act"><a href="{% url 'modifica' 'stabilita' t.pk %}?next={{ request.path }}">registra esito</a></td></tr>{% endfor %}</table></div>
-  {% else %}<div class="empty">La stabilità parte in automatico quando il progetto passa da Campionatura a Stabilità.</div>{% endif %}
+  {% else %}<div class="empty">{% if richiede_stabilita %}La stabilità (90 giorni) parte in automatico quando la campionatura è approvata.{% else %}Formula esistente: la stabilità non è richiesta.{% endif %}</div>{% endif %}
   </div>
 
   {# ---------------- Artwork ---------------- #}
   <div class="card"><div class="ch"><h2>Artwork</h2><a class="btn sm" href="{% url 'nuovo' 'artwork' %}?progetto={{ p.pk }}&cliente={{ p.cliente_id }}&next={{ request.path }}">+ Artwork</a></div>
-  {% if artwork %}<div class="tw"><table><tr><th>Artwork</th><th>INCI riportato</th><th>Stato</th><th>File</th><th></th></tr>
+  {% if artwork %}<div class="tw"><table><tr><th>Artwork</th><th>INCI riportato</th><th>Stato</th><th>TDS</th><th>Impianti</th><th>File</th><th></th></tr>
   {% for a in artwork %}<tr><td>{{ a.nome }} <strong>v{{ a.versione }}</strong></td><td>{{ a.versione_formula|default:"—" }}</td>
-    <td><span class="badge {% if a.stato == 'approvato' %}ok{% elif a.stato == 'da_rifare' %}bad{% elif a.stato == 'in_approvazione' %}info{% endif %}">{{ a.get_stato_display }}</span></td>
-    <td>{% if a.file %}<a href="{{ a.file.url }}">apri</a>{% else %}<span class="muted">—</span>{% endif %}</td>
+    <td><span class="badge {% if a.stato == 'approvato' %}ok{% elif a.stato == 'da_rifare' or a.stato == 'modifiche' %}bad{% elif a.stato == 'in_approvazione' %}info{% elif a.stato == 'attesa_tds' %}warn{% endif %}">{{ a.get_stato_display }}</span></td>
+    <td class="small">{% if a.data_tds_richiesto %}richiesto {{ a.data_tds_richiesto|date:"d/m/Y" }}{% else %}<span class="muted">da richiedere</span>{% endif %}{% if a.data_tds_ricevuto %}<br>ricevuto {{ a.data_tds_ricevuto|date:"d/m/Y" }}{% endif %}</td>
+    <td class="small n">{% if a.prezzo_impianto %}{{ a.prezzo_impianto|floatformat:"2g" }} €{% if a.impianto_fatturato %}<br><span class="muted">fatturati</span>{% endif %}{% else %}<span class="muted">—</span>{% endif %}</td>
+    <td>{% if a.file_tds %}<a href="{{ a.file_tds.url }}">TDS</a> {% endif %}{% if a.file %}<a href="{{ a.file.url }}">artwork</a>{% elif not a.file_tds %}<span class="muted">—</span>{% endif %}</td>
     <td class="act"><a href="{% url 'modifica' 'artwork' a.pk %}?next={{ request.path }}">modifica</a></td></tr>{% endfor %}</table></div>
-  {% else %}<div class="empty">Gli artwork (litografie, etichette) vanno approvati dopo la stabilità, con l'INCI definitivo.</div>{% endif %}
+  {% else %}<div class="empty">Con l'ordine si chiede al produttore il TDS, che serve al cliente per preparare l'artwork; il regolatorio del produttore lo controlla e, senza altre modifiche, diventa definitivo.</div>{% endif %}
   </div>
 
   {# ---------------- Prodotti e ordini ---------------- #}
@@ -110,6 +113,9 @@
 
   <div class="card"><div class="ch"><h2>Dati del progetto</h2></div><div class="cb"><dl class="dl">
     <dt>Tipo prodotto</dt><dd>{{ p.tipo_prodotto|default:"—" }}</dd>
+    <dt>Sviluppo</dt><dd>{{ p.get_sviluppo_display }}{% if p.versione_formula %} · {{ p.versione_formula }}{% endif %}</dd>
+    <dt>Lead time packaging</dt><dd>{{ p.lead_time_giorni }} giorni</dd>
+    <dt>Campione di stampa</dt><dd>{{ p.get_campione_packaging_display }}</dd>
     <dt>Quantità prevista</dt><dd>{% if p.quantita_prevista %}{{ p.quantita_prevista|intcomma }} pz{% else %}—{% endif %}</dd>
     <dt>Prezzo target</dt><dd>{% if p.prezzo_target %}{{ p.prezzo_target|floatformat:2 }} €/pz{% else %}—{% endif %}</dd>
     <dt>Consegna richiesta</dt><dd>{{ p.data_consegna_richiesta|date:"d/m/Y"|default:"—" }}</dd>

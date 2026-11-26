@@ -127,14 +127,25 @@ class Produttore(models.Model):
 # --------------------------------------------------------------------------
 class Progetto(models.Model):
     class Fase(models.TextChoices):
-        LEAD = "lead", "Lead / Brief"
-        QUOTAZIONE = "quotazione", "Quotazione"
+        LEAD = "lead", "Brief"
+        QUOTAZIONE = "quotazione", "Offerta"
         CAMPIONATURA = "campionatura", "Campionatura"
-        STABILITA = "stabilita", "Stabilità"
-        PACKAGING = "packaging", "Artwork e packaging"
-        ORDINE = "ordine", "Ordine"
+        STABILITA = "stabilita", "Stabilità e artwork"
+        PACKAGING = "packaging", "Packaging in produzione"
         PRODUZIONE = "produzione", "Produzione"
-        CONSEGNATO = "consegnato", "Consegnato"
+        SPEDIZIONE = "spedizione", "Spedizione e fattura"
+        CONSEGNATO = "consegnato", "Concluso"
+
+    class Sviluppo(models.TextChoices):
+        NUOVA = "nuova", "Formula nuova (campionatura e stabilità)"
+        ESISTENTE_CAMPIONE = "esistente_campione", "Formula esistente, con campionatura"
+        ESISTENTE = "esistente", "Formula esistente, senza campionatura né stabilità"
+
+    class CampionePackaging(models.TextChoices):
+        ATTESA = "attesa", "Non ancora ricevuto"
+        AL_CLIENTE = "al_cliente", "Inviato al cliente"
+        APPROVATO = "approvato", "Approvato dal cliente"
+        DA_RIFARE = "da_rifare", "Da rifare"
 
     class Stato(models.TextChoices):
         APERTO = "aperto", "Aperto"
@@ -162,6 +173,28 @@ class Progetto(models.Model):
     )
     data_consegna_richiesta = models.DateField(null=True, blank=True)
     brief = models.TextField(blank=True)
+    sviluppo = models.CharField("tipo di sviluppo", max_length=20, choices=Sviluppo.choices, default=Sviluppo.NUOVA)
+    versione_formula = models.ForeignKey(
+        "VersioneFormula",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="progetti_diretti",
+        verbose_name="formula esistente da usare",
+        help_text="Solo per formule esistenti senza campionatura.",
+    )
+    lead_time_giorni = models.PositiveIntegerField(
+        "lead time del packaging (giorni)",
+        default=150,
+        help_text="Dall'artwork definitivo alla merce pronta: 150 per le bombole, 120 per flaconi e foamer.",
+    )
+    campione_packaging = models.CharField(
+        "campione di stampa del packaging",
+        max_length=20,
+        choices=CampionePackaging.choices,
+        default=CampionePackaging.ATTESA,
+        help_text="Prova della litografia o etichetta che il cliente approva prima della produzione.",
+    )
     creato = models.DateTimeField(auto_now_add=True)
     aggiornato = models.DateTimeField(auto_now=True)
 
@@ -352,6 +385,17 @@ class Quotazione(models.Model):
     data = models.DateField(default=oggi)
     valida_fino = models.DateField(null=True, blank=True)
     stato = models.CharField(max_length=20, choices=Stato.choices, default=Stato.BOZZA)
+    commissione_pct = models.DecimalField(
+        "commissione agente (%)", max_digits=5, decimal_places=2, default=0, help_text="Di solito tra 2 e 7, sul prezzo di vendita."
+    )
+    margine_obiettivo_pct = models.DecimalField(
+        "margine obiettivo (%)",
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Sul prezzo di vendita, al netto di costi fissi e commissione. Serve a calcolare il prezzo suggerito.",
+    )
     motivo = models.CharField(
         "motivo della revisione", max_length=250, blank=True, help_text="Es. aggiunto attivo, cambiato erogatore."
     )
@@ -382,8 +426,9 @@ class Quotazione(models.Model):
 
     @property
     def margine_pct(self):
+        """Margine netto sul prezzo: tolti costo del produttore, costi fissi e commissione dell'agente."""
         prezzo = self.totale_prezzo
-        return (prezzo - self.totale_costo) / prezzo * 100 if prezzo else None
+        return sum((r.margine_totale for r in self.righe.all()), Decimal("0")) / prezzo * 100 if prezzo else None
 
 
 class RigaQuotazione(models.Model):
@@ -399,7 +444,16 @@ class RigaQuotazione(models.Model):
     costo_unitario = models.DecimalField(
         "costo dal produttore (€)", max_digits=12, decimal_places=4, default=0
     )
-    prezzo_unitario = models.DecimalField("prezzo al cliente (€)", max_digits=12, decimal_places=4, default=0)
+    costi_fissi = models.DecimalField(
+        "nostri costi fissi per pezzo (€)", max_digits=12, decimal_places=4, default=0
+    )
+    prezzo_unitario = models.DecimalField(
+        "prezzo al cliente (€)",
+        max_digits=12,
+        decimal_places=4,
+        default=0,
+        help_text="Lasciando 0 viene proposto il prezzo suggerito, se la quotazione ha un margine obiettivo.",
+    )
 
     class Meta:
         ordering = ["pk"]
@@ -420,13 +474,37 @@ class RigaQuotazione(models.Model):
     def totale_prezzo(self):
         return self.quantita * self.prezzo_unitario
 
+    def save(self, *args, **kwargs):
+        if not self.prezzo_unitario and self.prezzo_suggerito:
+            self.prezzo_unitario = self.prezzo_suggerito
+        super().save(*args, **kwargs)
+
+    @property
+    def commissione_unitaria(self):
+        return self.prezzo_unitario * self.quotazione.commissione_pct / 100
+
+    @property
+    def margine_unitario(self):
+        return self.prezzo_unitario - self.costo_unitario - self.costi_fissi - self.commissione_unitaria
+
+    @property
+    def margine_totale(self):
+        return self.quantita * self.margine_unitario
+
     @property
     def margine_pct(self):
-        return (
-            (self.prezzo_unitario - self.costo_unitario) / self.prezzo_unitario * 100
-            if self.prezzo_unitario
-            else None
-        )
+        return self.margine_unitario / self.prezzo_unitario * 100 if self.prezzo_unitario else None
+
+    @property
+    def prezzo_suggerito(self):
+        """Prezzo che lascia il margine obiettivo dopo costi fissi e commissione (entrambi % sul prezzo)."""
+        q = self.quotazione
+        if q.margine_obiettivo_pct is None:
+            return None
+        resto = 1 - (q.margine_obiettivo_pct + q.commissione_pct) / 100
+        if resto <= 0:
+            return None
+        return ((self.costo_unitario + self.costi_fissi) / resto).quantize(Decimal("0.001"))
 
 
 # --------------------------------------------------------------------------
@@ -465,9 +543,11 @@ class Componente(models.Model):
 
 class Artwork(models.Model):
     class Stato(models.TextChoices):
-        BOZZA = "bozza", "Bozza"
-        IN_APPROVAZIONE = "in_approvazione", "In approvazione"
-        APPROVATO = "approvato", "Approvato"
+        ATTESA_TDS = "attesa_tds", "In attesa del TDS dal produttore"
+        BOZZA = "bozza", "TDS al cliente, artwork in preparazione"
+        IN_APPROVAZIONE = "in_approvazione", "Al regolatorio del produttore"
+        MODIFICHE = "modifiche", "Modifiche richieste dal regolatorio"
+        APPROVATO = "approvato", "Definitivo"
         DA_RIFARE = "da_rifare", "Da rifare"
         SUPERATO = "superato", "Superato"
 
@@ -487,8 +567,18 @@ class Artwork(models.Model):
         help_text="Versione della formula il cui INCI è stampato su questo artwork.",
     )
     stato = models.CharField(max_length=20, choices=Stato.choices, default=Stato.BOZZA)
-    file = models.FileField(upload_to="artwork/", blank=True)
-    data_approvazione = models.DateField(null=True, blank=True)
+    data_tds_richiesto = models.DateField("TDS richiesto al produttore il", null=True, blank=True)
+    data_tds_ricevuto = models.DateField("TDS ricevuto il", null=True, blank=True)
+    file_tds = models.FileField("file TDS", upload_to="tds/", blank=True)
+    file = models.FileField("file artwork", upload_to="artwork/", blank=True)
+    data_approvazione = models.DateField("definitivo dal", null=True, blank=True)
+    costo_impianto = models.DecimalField(
+        "costo impianti dal produttore (€)", max_digits=12, decimal_places=2, default=0,
+        help_text="Costo fisso una tantum per un artwork nuovo (impianti di litografia, cliché…).",
+    )
+    prezzo_impianto = models.DecimalField("prezzo impianti al cliente (€)", max_digits=12, decimal_places=2, default=0)
+    impianto_ordinato = models.BooleanField("impianti già ordinati al produttore", default=False)
+    impianto_fatturato = models.BooleanField("impianti già fatturati al cliente", default=False)
     note = models.TextField(blank=True)
 
     class Meta:
@@ -587,6 +677,12 @@ class Prodotto(models.Model):
         help_text="Versione che verrà usata alla prossima produzione.",
     )
     formato = models.CharField(max_length=80, blank=True, help_text="Es. 200 ml.")
+    prossima_consegna = models.DateField(
+        "prossima consegna prevista",
+        null=True,
+        blank=True,
+        help_text="Dal forecast del cliente: serve a ricordare di chiedere l'ordine per tempo.",
+    )
     attivo = models.BooleanField(default=True)
 
     class Meta:
@@ -631,7 +727,8 @@ class OrdineCliente(models.Model):
         INVIATA = "inviata", "Conferma inviata"
         ACCETTATA = "accettata", "Accettata dal cliente"
         IN_PRODUZIONE = "in_produzione", "In produzione"
-        CONSEGNATO = "consegnato", "Consegnato"
+        PRONTO = "pronto", "Merce pronta"
+        CONSEGNATO = "consegnato", "Spedito"
         ANNULLATO = "annullato", "Annullato"
 
     numero = models.CharField(max_length=20, unique=True, blank=True)
@@ -754,6 +851,13 @@ class Azienda(models.Model):
     iban = models.CharField("IBAN", max_length=34, blank=True)
     email = models.EmailField(blank=True)
     telefono = models.CharField(max_length=40, blank=True)
+    logo = models.FileField(
+        "logo per la carta intestata", upload_to="azienda/", blank=True, help_text="Immagine PNG, JPG o SVG."
+    )
+    piede_documenti = models.TextField(
+        "piè di pagina dei documenti", blank=True,
+        help_text="Es. capitale sociale, REA, sito web. Compare in fondo a ogni pagina dei PDF.",
+    )
 
     class Meta:
         verbose_name = "dati azienda"
@@ -816,10 +920,19 @@ class OrdineAcquisto(models.Model):
     def totale(self):
         return sum((r.totale for r in self.righe.all()), Decimal("0"))
 
+    @property
+    def differenza_fattura(self):
+        """Fattura del produttore meno totale dell'ordine; None se non c'è fattura o se coincidono."""
+        if self.importo_fattura_fornitore is None:
+            return None
+        diff = self.importo_fattura_fornitore - euro(self.totale)
+        return diff if abs(diff) >= Decimal("0.01") else None
+
 
 class TipoRiga(models.TextChoices):
     PRODOTTO = "prodotto", "Prodotto finito"
     PACKAGING = "packaging", "Packaging in deposito"
+    IMPIANTI = "impianti", "Impianti per nuovo artwork"
     ALTRO = "altro", "Altro"
 
 
@@ -932,6 +1045,8 @@ class PreFattura(models.Model):
         "numero fattura definitivo", max_length=40, blank=True, help_text="Assegnato dal software di contabilità."
     )
     data_fattura = models.DateField("data fattura definitiva", null=True, blank=True)
+    pagata = models.BooleanField("pagamento ricevuto", default=False)
+    data_pagamento = models.DateField(null=True, blank=True)
     note = models.TextField(blank=True)
 
     class Meta:
