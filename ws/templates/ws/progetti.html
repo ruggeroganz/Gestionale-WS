@@ -1,0 +1,15 @@
+{% extends "ws/base.html" %}
+{% load humanize %}
+{% block title %}Progetti{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Progetti</h1><div class="sub">{{ totale }} progetti ·
+  {% for v, n in stati %}<a href="?stato={{ v }}"{% if v == stato %} style="font-weight:700"{% endif %}>{{ n }}</a> · {% endfor %}<a href="?stato=tutti"{% if stato == 'tutti' %} style="font-weight:700"{% endif %}>Tutti</a></div></div>
+  <div class="actions"><a class="btn" href="{% url 'nuovo' 'progetto' %}">+ Nuovo progetto</a></div></div>
+<div class="kanban">
+{% for col in colonne %}<div class="kcol"><h3>{{ col.nome }} <span>{{ col.progetti|length }}</span></h3>
+  {% for p in col.progetti %}<a class="kcard" href="{{ p.get_absolute_url }}"><div class="c">{{ p.codice }} · {{ p.cliente }}</div><div class="t">{{ p.nome }}</div>
+    <div class="small muted">{{ p.produttore|default:"produttore da definire" }}{% if p.quantita_prevista %} · {{ p.quantita_prevista|intcomma }} pz{% endif %}</div>
+    {% if p.ritardo %}<span class="badge bad">in ritardo</span>{% endif %}{% if p.stato != 'aperto' %}<span class="badge">{{ p.get_stato_display }}</span>{% endif %}</a>{% endfor %}
+</div>{% endfor %}
+</div>
+{% endblock %}

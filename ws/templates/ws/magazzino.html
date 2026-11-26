@@ -1,0 +1,17 @@
+{% extends "ws/base.html" %}
+{% load humanize %}
+{% block title %}Magazzino packaging{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Magazzino packaging</h1><div class="sub">Packaging di proprietà dei clienti, in deposito presso i produttori · {{ totale|intcomma }} pezzi in totale</div></div>
+  <div class="actions"><a class="btn" href="{% url 'nuovo' 'movimento' %}">+ Movimento</a></div></div>
+<div class="card"><div class="ch"><h2>Giacenze</h2></div><div class="tw"><table><tr><th>Cliente</th><th>Packaging</th><th>Artwork / INCI</th><th>In deposito presso</th><th class="n">Giacenza</th><th></th></tr>
+{% for g in giacenze %}<tr><td><a href="{{ g.packaging.cliente.get_absolute_url }}">{{ g.packaging.cliente }}</a></td><td><strong>{{ g.packaging.codice }}</strong> · {{ g.packaging.descrizione }}</td>
+  <td>{{ g.packaging.artwork|default:"—" }}{% if g.packaging.riporta_inci %}<div class="small muted">INCI di {{ g.packaging.versione_formula_stampata|default:"non indicato" }}</div>{% endif %}{% if g.inci_obsoleto %}<span class="badge bad">INCI non allineato</span>{% endif %}</td>
+  <td>{{ g.produttore }}</td><td class="n"><strong>{{ g.quantita|intcomma }}</strong></td>
+  <td class="act"><a href="{% url 'nuovo' 'movimento' %}?packaging={{ g.packaging.pk }}&produttore={{ g.produttore.pk }}">movimento</a></td></tr>
+{% empty %}<tr><td colspan="6" class="muted">Nessuna giacenza.</td></tr>{% endfor %}</table></div></div>
+<div class="card"><div class="ch"><h2>Ultimi movimenti</h2></div><div class="tw"><table><tr><th>Data</th><th>Tipo</th><th>Packaging</th><th>Presso</th><th>Ordine</th><th class="n">Quantità</th><th>Note</th></tr>
+{% for m in movimenti %}<tr><td>{{ m.data|date:"d/m/Y" }}</td><td>{{ m.get_tipo_display }}</td><td>{{ m.packaging.codice }} · {{ m.packaging.descrizione }}<div class="small muted">{{ m.packaging.cliente }}</div></td><td>{{ m.produttore }}</td>
+  <td>{% if m.ordine %}<a href="{{ m.ordine.get_absolute_url }}">{{ m.ordine.numero }}</a>{% endif %}</td><td class="n">{% if m.quantita > 0 %}+{% endif %}{{ m.quantita|intcomma }}</td><td class="small">{{ m.note }}</td></tr>
+{% empty %}<tr><td colspan="7" class="muted">Nessun movimento.</td></tr>{% endfor %}</table></div></div>
+{% endblock %}

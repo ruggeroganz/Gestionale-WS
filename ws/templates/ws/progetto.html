@@ -1,0 +1,121 @@
+{% extends "ws/base.html" %}
+{% load humanize %}
+{% block title %}{{ p.nome }}{% endblock %}
+{% block content %}
+<div class="head"><div><h1>{{ p.nome }}</h1>
+  <div class="sub">{{ p.codice }} · <a href="{{ p.cliente.get_absolute_url }}">{{ p.cliente }}</a> · {{ p.produttore|default:"produttore da definire" }}{% if p.stato != 'aperto' %} · <span class="badge">{{ p.get_stato_display }}</span>{% endif %}</div></div>
+  <div class="actions"><a class="btn sec" href="{% url 'modifica' 'progetto' p.pk %}">Modifica dati</a></div></div>
+
+<div class="stepper">{% for f in fasi %}<div class="step {{ f.stato }}">{{ f.nome }}</div>{% endfor %}</div>
+
+{% for a in avvisi %}<div class="alert">{{ a }}</div>{% endfor %}
+
+<div class="grid g21">
+<div>
+  {# ---------------- Quotazioni ---------------- #}
+  <div class="card"><div class="ch"><h2>Quotazioni</h2><a class="btn sm" href="{% url 'nuovo' 'quotazione' %}?progetto={{ p.pk }}&next={{ request.path }}">+ Quotazione</a></div>
+  {% for q in quotazioni %}
+    <div class="cb" style="border-bottom:1px solid var(--line)">
+      <strong>Versione {{ q.numero }}</strong> · {{ q.data|date:"d/m/Y" }}
+      <span class="badge {% if q.stato == 'accettata' %}ok{% elif q.stato == 'inviata' %}info{% elif q.stato == 'rifiutata' %}bad{% endif %}">{{ q.get_stato_display }}</span>
+      {% if q.versione_formula %}<span class="badge">{{ q.versione_formula }}</span>{% endif %}
+      {% if q.margine_pct != None %}<span class="muted small">margine {{ q.margine_pct|floatformat:1 }}%</span>{% endif %}
+      <span style="float:right"><a href="{% url 'modifica' 'quotazione' q.pk %}?next={{ request.path }}">modifica</a></span>
+      {% if q.motivo %}<div class="small muted">Motivo revisione: {{ q.motivo }}</div>{% endif %}
+    </div>
+    <div class="tw"><table class="fitta"><tr><th style="min-width:210px">Voce</th><th class="n">Q.tà</th><th class="n">Costo</th><th class="n">Prezzo</th><th class="n">Marg.</th><th class="n">Totale</th><th></th></tr>
+    {% for r in q.righe.all %}<tr><td>{{ r.descrizione }}<div class="small muted">{{ r.get_tipo_display }}</div></td><td class="n">{{ r.quantita|intcomma }}</td><td class="n">{{ r.costo_unitario|floatformat:3 }} €</td><td class="n">{{ r.prezzo_unitario|floatformat:3 }} €</td>
+      <td class="n">{% if r.margine_pct != None %}{{ r.margine_pct|floatformat:1 }}%{% endif %}</td><td class="n">{{ r.totale_prezzo|floatformat:"2g" }} €</td>
+      <td class="act"><a href="{% url 'modifica' 'rigaquotazione' r.pk %}?next={{ request.path }}">modifica</a></td></tr>{% endfor %}
+    <tr class="tot"><td colspan="5"><a class="small" style="font-weight:400" href="{% url 'nuovo' 'rigaquotazione' %}?quotazione={{ q.pk }}&next={{ request.path }}">+ aggiungi voce</a></td><td class="n">{{ q.totale_prezzo|floatformat:"2g" }} €</td><td></td></tr>
+    </table></div>
+  {% empty %}<div class="empty">Nessuna quotazione. Inserisci il costo ricevuto dal produttore e il prezzo per il cliente.</div>{% endfor %}
+  </div>
+
+  {# ---------------- Formule ---------------- #}
+  <div class="card"><div class="ch"><h2>Formule</h2><a class="btn sm" href="{% url 'nuovo' 'formula' %}?progetto={{ p.pk }}{% if p.produttore_id %}&produttore={{ p.produttore_id }}{% endif %}&next={{ request.path }}">+ Formula</a></div>
+  {% for f in formule %}
+    <div class="cb" style="border-bottom:1px solid var(--line)"><strong>{{ f.codice }}</strong> · {{ f.nome }}
+      <span style="float:right"><a href="{% url 'nuovo' 'versioneformula' %}?formula={{ f.pk }}&next={{ request.path }}">+ nuova versione</a> · <a href="{% url 'modifica' 'formula' f.pk %}?next={{ request.path }}">modifica</a></span></div>
+    <div class="tw"><table><tr><th>Vers.</th><th>Data</th><th>INCI</th><th>Modifiche</th><th></th></tr>
+    {% for v in f.versioni.all %}<tr><td><strong>v{{ v.numero }}</strong>{% if v == formula_approvata %} <span class="badge ok">approvata</span>{% endif %}</td><td>{{ v.data|date:"d/m/Y" }}</td><td class="inci">{{ v.inci }}</td><td class="small">{{ v.modifiche }}</td>
+      <td class="act"><a href="{% url 'modifica' 'versioneformula' v.pk %}?next={{ request.path }}">modifica</a></td></tr>
+    {% empty %}<tr><td colspan="5" class="muted">Nessuna versione: aggiungine una con l'INCI.</td></tr>{% endfor %}</table></div>
+  {% empty %}<div class="empty">Nessuna formula collegata al progetto.</div>{% endfor %}
+  </div>
+
+  {# ---------------- Campionature ---------------- #}
+  <div class="card"><div class="ch"><h2>Campionature</h2><a class="btn sm" href="{% url 'nuovo' 'campionatura' %}?progetto={{ p.pk }}&next={{ request.path }}">+ Campionatura</a></div>
+  {% if campionature %}<div class="tw"><table><tr><th>N.</th><th>Formula</th><th>Inviata</th><th>Esito</th><th>Feedback del cliente</th><th></th></tr>
+  {% for c in campionature %}<tr><td>{{ c.numero }}</td><td>{{ c.versione_formula }}</td><td>{{ c.data_invio|date:"d/m/Y" }}</td>
+    <td><span class="badge {% if c.esito == 'approvata' %}ok{% elif c.esito == 'modifiche' %}warn{% elif c.esito == 'rifiutata' %}bad{% else %}info{% endif %}">{{ c.get_esito_display }}</span></td>
+    <td class="small">{{ c.feedback }}</td><td class="act"><a href="{% url 'modifica' 'campionatura' c.pk %}?next={{ request.path }}">modifica</a></td></tr>{% endfor %}</table></div>
+  {% else %}<div class="empty">Nessuna campionatura inviata.</div>{% endif %}
+  </div>
+
+  {# ---------------- Stabilità ---------------- #}
+  <div class="card"><div class="ch"><h2>Stabilità</h2><a class="btn sm" href="{% url 'nuovo' 'stabilita' %}?progetto={{ p.pk }}&next={{ request.path }}">+ Test</a></div>
+  {% if stabilita %}<div class="tw"><table><tr><th>Formula</th><th>Inizio</th><th>Fine prevista</th><th>Esito</th><th>Note</th><th></th></tr>
+  {% for t in stabilita %}<tr><td>{{ t.versione_formula }}</td><td>{{ t.data_inizio|date:"d/m/Y" }}</td><td>{{ t.data_fine_prevista|date:"d/m/Y" }}{% if t.esito == 'in_corso' and not t.scaduta %}<div class="small muted">tra {{ t.giorni_rimanenti }} giorni</div>{% endif %}</td>
+    <td><span class="badge {% if t.esito == 'superata' %}ok{% elif t.esito == 'fallita' %}bad{% elif t.scaduta %}warn{% else %}info{% endif %}">{{ t.get_esito_display }}{% if t.scaduta %} · esito da registrare{% endif %}</span></td>
+    <td class="small">{{ t.note }}</td><td class="act"><a href="{% url 'modifica' 'stabilita' t.pk %}?next={{ request.path }}">registra esito</a></td></tr>{% endfor %}</table></div>
+  {% else %}<div class="empty">La stabilità parte in automatico quando il progetto passa da Campionatura a Stabilità.</div>{% endif %}
+  </div>
+
+  {# ---------------- Artwork ---------------- #}
+  <div class="card"><div class="ch"><h2>Artwork</h2><a class="btn sm" href="{% url 'nuovo' 'artwork' %}?progetto={{ p.pk }}&cliente={{ p.cliente_id }}&next={{ request.path }}">+ Artwork</a></div>
+  {% if artwork %}<div class="tw"><table><tr><th>Artwork</th><th>INCI riportato</th><th>Stato</th><th>File</th><th></th></tr>
+  {% for a in artwork %}<tr><td>{{ a.nome }} <strong>v{{ a.versione }}</strong></td><td>{{ a.versione_formula|default:"—" }}</td>
+    <td><span class="badge {% if a.stato == 'approvato' %}ok{% elif a.stato == 'da_rifare' %}bad{% elif a.stato == 'in_approvazione' %}info{% endif %}">{{ a.get_stato_display }}</span></td>
+    <td>{% if a.file %}<a href="{{ a.file.url }}">apri</a>{% else %}<span class="muted">—</span>{% endif %}</td>
+    <td class="act"><a href="{% url 'modifica' 'artwork' a.pk %}?next={{ request.path }}">modifica</a></td></tr>{% endfor %}</table></div>
+  {% else %}<div class="empty">Gli artwork (litografie, etichette) vanno approvati dopo la stabilità, con l'INCI definitivo.</div>{% endif %}
+  </div>
+
+  {# ---------------- Prodotti e ordini ---------------- #}
+  <div class="card"><div class="ch"><h2>Prodotti (SKU) e ordini</h2><span class="actions">
+    <a class="btn sm" href="{% url 'nuovo' 'prodotto' %}?progetto={{ p.pk }}&cliente={{ p.cliente_id }}">+ Prodotto</a>
+    {% if p.produttore_id %}<a class="btn sm" href="{% url 'nuovo' 'ordine' %}?progetto={{ p.pk }}&cliente={{ p.cliente_id }}&produttore={{ p.produttore_id }}">+ Ordine</a>{% endif %}</span></div>
+  {% if prodotti or ordini %}<div class="tw"><table>
+  {% for s in prodotti %}<tr><td><a href="{{ s.get_absolute_url }}">{{ s.codice }}</a> · {{ s.nome }}</td><td>formula {{ s.versione_formula|default:"da indicare" }}</td><td class="act">distinta base →</td></tr>{% endfor %}
+  {% for o in ordini %}<tr><td><a href="{{ o.get_absolute_url }}">Ordine {{ o.numero }}</a> · {{ o.data|date:"d/m/Y" }}</td><td><span class="badge">{{ o.get_stato_display }}</span></td><td class="n">{{ o.totale|floatformat:"2g" }} €</td></tr>{% endfor %}
+  </table></div>{% else %}<div class="empty">Crea il prodotto e la sua distinta base quando formula e packaging sono definiti.</div>{% endif %}
+  </div>
+</div>
+
+<div>
+  {# ---------------- Avanzamento ---------------- #}
+  <div class="card"><div class="ch"><h2>Avanzamento</h2><span class="badge info">{{ p.get_fase_display }}</span></div><div class="cb">
+    {% if fase_successiva %}
+    <p class="small muted">Per passare a «{{ fase_successiva }}»:</p>
+    <ul class="checks">{% for c in controlli %}<li class="{% if c.ok %}si{% else %}no{% endif %}">{{ c.testo }}</li>{% endfor %}</ul>
+    <form method="post" action="{% url 'progetto_avanza' p.pk %}">{% csrf_token %}<button class="btn" {% if not puo_avanzare %}disabled{% endif %}>Passa a «{{ fase_successiva }}»</button></form>
+    {% else %}<p>Progetto concluso.</p>{% endif %}
+    {% if fasi_precedenti %}
+    <details style="margin-top:12px"><summary class="small muted" style="cursor:pointer">Riporta a una fase precedente</summary>
+      <form method="post" action="{% url 'progetto_arretra' p.pk %}" class="note" style="margin-top:8px;flex-wrap:wrap">{% csrf_token %}
+        <select name="fase">{% for f in fasi_precedenti %}<option value="{{ f.valore }}">{{ f.nome }}</option>{% endfor %}</select>
+        <input name="motivo" placeholder="Motivo" required><button class="btn sec sm">Riporta</button></form></details>
+    {% endif %}
+  </div></div>
+
+  <div class="card"><div class="ch"><h2>Piano a ritroso</h2></div><div class="cb">
+    {% if planner %}<ul class="checks">{% for t in planner %}<li class="{% if t.fatto %}si{% elif t.in_ritardo %}ritardo{% else %}attesa{% endif %}"><span class="d">{{ t.data|date:"d/m/Y" }}</span>{{ t.nome }}</li>{% endfor %}</ul>
+    {% else %}<p class="muted">Indica la data di consegna richiesta per calcolare le scadenze.</p>{% endif %}
+  </div></div>
+
+  <div class="card"><div class="ch"><h2>Dati del progetto</h2></div><div class="cb"><dl class="dl">
+    <dt>Tipo prodotto</dt><dd>{{ p.tipo_prodotto|default:"—" }}</dd>
+    <dt>Quantità prevista</dt><dd>{% if p.quantita_prevista %}{{ p.quantita_prevista|intcomma }} pz{% else %}—{% endif %}</dd>
+    <dt>Prezzo target</dt><dd>{% if p.prezzo_target %}{{ p.prezzo_target|floatformat:2 }} €/pz{% else %}—{% endif %}</dd>
+    <dt>Consegna richiesta</dt><dd>{{ p.data_consegna_richiesta|date:"d/m/Y"|default:"—" }}</dd>
+    <dt>Responsabile</dt><dd>{{ p.responsabile.get_full_name|default:p.responsabile|default:"—" }}</dd>
+  </dl>{% if p.brief %}<p style="margin-top:10px">{{ p.brief|linebreaksbr }}</p>{% endif %}</div></div>
+
+  <div class="card"><div class="ch"><h2>Diario</h2></div><div class="cb">
+    <form method="post" action="{% url 'progetto_nota' p.pk %}" class="note">{% csrf_token %}<textarea name="testo" placeholder="Aggiungi una nota (telefonata, email, decisione…)" required></textarea><button class="btn sec sm">Salva</button></form>
+    <ul class="timeline">{% for e in eventi %}<li><div class="when">{{ e.data|date:"d/m/Y H:i" }}{% if e.utente %} · {{ e.utente.get_full_name|default:e.utente.username }}{% endif %}{% if e.automatico %} · automatico{% endif %}</div>{{ e.testo|linebreaksbr }}</li>{% empty %}<li class="muted">Nessuna attività.</li>{% endfor %}</ul>
+  </div></div>
+</div>
+</div>
+{% endblock %}

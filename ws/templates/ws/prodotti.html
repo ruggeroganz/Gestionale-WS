@@ -1,0 +1,9 @@
+{% extends "ws/base.html" %}
+{% block title %}Prodotti{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Prodotti e distinte base</h1><div class="sub">Ogni SKU è una formula in una versione precisa più i suoi componenti di packaging.</div></div><div class="actions"><a class="btn" href="{% url 'nuovo' 'prodotto' %}">+ Nuovo prodotto</a></div></div>
+<div class="card"><div class="tw"><table><tr><th>SKU</th><th>Prodotto</th><th>Cliente</th><th>Formula da produrre</th><th class="n">Componenti</th><th>Controlli</th></tr>
+{% for p in prodotti %}<tr><td><a href="{{ p.get_absolute_url }}">{{ p.codice }}</a></td><td>{{ p.nome }}{% if not p.attivo %} <span class="badge">non attivo</span>{% endif %}</td><td>{{ p.cliente }}</td><td>{{ p.versione_formula|default:"—" }}</td><td class="n">{{ p.n_righe }}</td>
+  <td>{% if p.avvisi %}<span class="badge bad">INCI non allineato</span>{% else %}<span class="badge ok">ok</span>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="6" class="muted">Nessun prodotto.</td></tr>{% endfor %}</table></div></div>
+{% endblock %}

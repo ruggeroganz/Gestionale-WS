@@ -1,0 +1,16 @@
+{% extends "ws/base.html" %}
+{% load humanize %}
+{% block title %}Packaging{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Packaging</h1><div class="sub">Componenti a catalogo e loro personalizzazioni per cliente (colore, litografia, etichetta).</div></div>
+  <div class="actions"><a class="btn sec" href="{% url 'nuovo' 'componente' %}">+ Componente a catalogo</a><a class="btn" href="{% url 'nuovo' 'packaging' %}">+ Packaging personalizzato</a></div></div>
+<div class="card"><div class="ch"><h2>Packaging personalizzato per cliente</h2></div><div class="tw"><table><tr><th>Codice</th><th>Descrizione</th><th>Cliente</th><th>Decorazione</th><th>Artwork / INCI</th><th class="n">MOQ</th><th></th></tr>
+{% for k in packaging %}<tr><td><strong>{{ k.codice }}</strong></td><td>{{ k.descrizione }}<div class="small muted">{{ k.componente }}</div></td><td>{{ k.cliente }}</td>
+  <td>{{ k.get_decorazione_display }}{% if k.colore %}<div class="small muted">{{ k.colore }}</div>{% endif %}</td>
+  <td>{{ k.artwork|default:"—" }}{% if k.riporta_inci %}<div class="small muted">INCI di {{ k.versione_formula_stampata|default:"non indicato" }}</div>{% endif %}</td>
+  <td class="n">{% if k.moq %}{{ k.moq|intcomma }}{% endif %}</td><td class="act"><a href="{% url 'modifica' 'packaging' k.pk %}">modifica</a></td></tr>
+{% empty %}<tr><td colspan="7" class="muted">Nessun packaging personalizzato.</td></tr>{% endfor %}</table></div></div>
+<div class="card"><div class="ch"><h2>Componenti a catalogo</h2></div><div class="tw"><table><tr><th>Codice</th><th>Tipo</th><th>Descrizione</th><th>Materiale</th><th>Formato</th><th></th></tr>
+{% for k in componenti %}<tr><td><strong>{{ k.codice }}</strong></td><td>{{ k.get_tipo_display }}</td><td>{{ k.descrizione }}</td><td>{{ k.materiale }}</td><td>{{ k.formato }}</td><td class="act"><a href="{% url 'modifica' 'componente' k.pk %}">modifica</a></td></tr>
+{% empty %}<tr><td colspan="6" class="muted">Nessun componente.</td></tr>{% endfor %}</table></div></div>
+{% endblock %}

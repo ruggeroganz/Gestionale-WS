@@ -1,0 +1,26 @@
+{% extends "ws/base.html" %}
+{% load humanize %}
+{% block title %}Ordine {{ o.numero }}{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Ordine {{ o.numero }}</h1><div class="sub"><a href="{{ o.cliente.get_absolute_url }}">{{ o.cliente }}</a> · produce {{ o.produttore }} · {{ o.data|date:"d/m/Y" }} · <span class="badge info">{{ o.get_stato_display }}</span>{% if o.progetto %} · progetto <a href="{{ o.progetto.get_absolute_url }}">{{ o.progetto.codice }}</a>{% endif %}</div></div>
+  <div class="actions"><a class="btn sec" href="{% url 'modifica' 'ordine' o.pk %}">Modifica / cambia stato</a><a class="btn" href="{% url 'ordine_stampa' o.pk %}">Conferma d'ordine</a></div></div>
+
+{% for a in avvisi %}<div class="alert bad"><strong>Attenzione, INCI non allineato:</strong> {{ a.prodotto.codice }} usa «{{ a.packaging.descrizione }}»{% if a.tipo == 'diverso' %} stampato con l'INCI di {{ a.stampata }}, ma la formula da produrre è {{ a.attuale }}{% else %} senza INCI di riferimento{% endif %}. <a href="{{ a.prodotto.get_absolute_url }}">Risolvi sul prodotto</a> prima di confermare.</div>{% endfor %}
+
+<div class="card"><div class="ch"><h2>Righe</h2><a class="btn sm" href="{% url 'nuovo' 'rigaordine' %}?ordine={{ o.pk }}">+ Riga</a></div>
+{% if righe %}<div class="tw"><table><tr><th>Prodotto</th><th>Formula</th><th class="n">Quantità</th><th class="n">Prezzo</th><th class="n">Totale</th><th></th></tr>
+{% for r in righe %}<tr><td><a href="{{ r.prodotto.get_absolute_url }}">{{ r.prodotto.codice }}</a> · {{ r.prodotto.nome }}</td><td>{{ r.prodotto.versione_formula|default:"—" }}</td><td class="n">{{ r.quantita|intcomma }}</td><td class="n">{{ r.prezzo_unitario|floatformat:3 }} €</td><td class="n">{{ r.totale|floatformat:"2g" }} €</td><td class="act"><a href="{% url 'modifica' 'rigaordine' r.pk %}">modifica</a></td></tr>{% endfor %}
+<tr class="tot"><td colspan="4">Totale imponibile</td><td class="n">{{ o.totale|floatformat:"2g" }} €</td><td></td></tr></table></div>
+{% else %}<div class="empty">Aggiungi i prodotti ordinati.</div>{% endif %}</div>
+
+<div class="card"><div class="ch"><h2>Fabbisogno di packaging</h2><span class="muted small">distinta base × quantità, al netto della giacenza presso {{ o.produttore }}</span></div>
+{% if fabbisogno %}<div class="tw"><table><tr><th>Packaging</th><th class="n">Necessari</th><th class="n">Già in giacenza</th><th class="n">Mancanti</th><th class="n">Da far acquistare (MOQ)</th><th class="n">Residuo dopo la produzione</th></tr>
+{% for f in fabbisogno %}<tr><td><strong>{{ f.packaging.codice }}</strong> · {{ f.packaging.descrizione }}{% if f.packaging.moq %}<div class="small muted">lotto minimo {{ f.packaging.moq|intcomma }}</div>{% endif %}</td>
+  <td class="n">{{ f.necessari|intcomma }}</td><td class="n">{{ f.giacenza|intcomma }}</td><td class="n">{{ f.mancante|intcomma }}</td>
+  <td class="n">{% if f.da_ordinare %}<strong>{{ f.da_ordinare|intcomma }}</strong>{% else %}<span class="badge ok">coperto</span>{% endif %}</td><td class="n">{{ f.residuo|intcomma }}</td></tr>{% endfor %}</table></div>
+<div class="cb">{% if movimenti %}<span class="badge ok">Movimenti di magazzino registrati</span> <a href="{% url 'magazzino' %}">vedi magazzino</a>
+  {% else %}<form method="post" action="{% url 'ordine_registra_packaging' o.pk %}" onsubmit="return confirm('Registrare carico e consumo del packaging per questo ordine?')">{% csrf_token %}
+    <button class="btn sec">Registra carico e consumo a magazzino</button> <span class="small muted">Da fare a produzione avvenuta: il residuo resta a disposizione del cliente per i riordini.</span></form>{% endif %}</div>
+{% else %}<div class="empty">Il fabbisogno si calcola quando l'ordine ha righe con distinta base.</div>{% endif %}</div>
+{% if o.note %}<div class="card"><div class="ch"><h2>Note</h2></div><div class="cb">{{ o.note|linebreaksbr }}</div></div>{% endif %}
+{% endblock %}

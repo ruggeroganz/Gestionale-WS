@@ -1,0 +1,8 @@
+{% extends "ws/base.html" %}
+{% block title %}Produttori{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Produttori</h1><div class="sub">Terzisti full service: sviluppano la formula, acquistano il packaging e producono.</div></div><div class="actions"><a class="btn" href="{% url 'nuovo' 'produttore' %}">+ Nuovo produttore</a></div></div>
+<div class="card"><div class="tw"><table><tr><th>Produttore</th><th>Paese</th><th class="n">Lead time</th><th class="n">Progetti aperti</th><th>Contatti</th><th></th></tr>
+{% for p in produttori %}<tr><td><strong>{{ p.nome }}</strong><div class="small muted">{{ p.note }}</div></td><td>{{ p.paese }}</td><td class="n">{{ p.lead_time_giorni }} giorni</td><td class="n">{{ p.n_progetti }}</td><td class="small">{{ p.email }}<br>{{ p.telefono }}</td><td class="act"><a href="{% url 'modifica' 'produttore' p.pk %}">modifica</a></td></tr>
+{% empty %}<tr><td colspan="6" class="muted">Nessun produttore.</td></tr>{% endfor %}</table></div></div>
+{% endblock %}

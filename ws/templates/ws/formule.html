@@ -1,0 +1,11 @@
+{% extends "ws/base.html" %}
+{% block title %}Formule{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Formule</h1><div class="sub">Ogni versione ha il proprio INCI: è quello che lega formula, artwork e packaging stampato.</div></div><div class="actions"><a class="btn" href="{% url 'nuovo' 'formula' %}">+ Nuova formula</a></div></div>
+<div class="card"><div class="tw"><table><tr><th>Formula</th><th>Produttore</th><th>Progetto</th><th>Versioni</th><th></th></tr>
+{% for f in formule %}<tr><td><strong>{{ f.codice }}</strong> · {{ f.nome }}<div class="small muted">{{ f.categoria }}</div></td><td>{{ f.produttore|default:"—" }}</td>
+  <td>{% if f.progetto %}<a href="{{ f.progetto.get_absolute_url }}">{{ f.progetto.nome }}</a>{% else %}<span class="muted">standard</span>{% endif %}</td>
+  <td>{% for v in f.versioni.all %}<a class="badge" href="{% url 'modifica' 'versioneformula' v.pk %}?next={{ request.path }}">v{{ v.numero }}</a> {% endfor %}</td>
+  <td class="act"><a href="{% url 'nuovo' 'versioneformula' %}?formula={{ f.pk }}&next={{ request.path }}">+ versione</a> · <a href="{% url 'modifica' 'formula' f.pk %}?next={{ request.path }}">modifica</a></td></tr>
+{% empty %}<tr><td colspan="5" class="muted">Nessuna formula.</td></tr>{% endfor %}</table></div></div>
+{% endblock %}

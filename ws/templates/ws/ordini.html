@@ -1,0 +1,10 @@
+{% extends "ws/base.html" %}
+{% load humanize %}
+{% block title %}Ordini{% endblock %}
+{% block content %}
+<div class="head"><h1>Ordini clienti</h1><div class="actions"><a class="btn" href="{% url 'nuovo' 'ordine' %}">+ Nuovo ordine</a></div></div>
+<div class="card"><div class="tw"><table><tr><th>Ordine</th><th>Data</th><th>Cliente</th><th>Produttore</th><th>Consegna prevista</th><th>Stato</th><th class="n">Totale</th></tr>
+{% for o in ordini %}<tr><td><a href="{{ o.get_absolute_url }}">{{ o.numero }}</a></td><td>{{ o.data|date:"d/m/Y" }}</td><td>{{ o.cliente }}</td><td>{{ o.produttore }}</td><td>{{ o.data_consegna_prevista|date:"d/m/Y"|default:"—" }}</td>
+  <td><span class="badge {% if o.stato == 'consegnato' %}ok{% elif o.stato == 'annullato' %}bad{% elif o.stato != 'bozza' %}info{% endif %}">{{ o.get_stato_display }}</span></td><td class="n">{{ o.totale|floatformat:"2g" }} €</td></tr>
+{% empty %}<tr><td colspan="7" class="muted">Nessun ordine.</td></tr>{% endfor %}</table></div></div>
+{% endblock %}

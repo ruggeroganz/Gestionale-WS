@@ -1,0 +1,23 @@
+{% extends "ws/base.html" %}
+{% block title %}{{ titolo }}{% endblock %}
+{% block content %}
+<div class="head"><div><h1>{{ titolo }}</h1>{% if obj %}<div class="sub">{{ obj }}</div>{% endif %}</div></div>
+<div class="card form"><form method="post" enctype="multipart/form-data" class="cb">{% csrf_token %}
+  <input type="hidden" name="next" value="{{ next }}">
+  {{ form.non_field_errors }}
+  {% for f in form.hidden_fields %}{{ f }}{% endfor %}
+  {% for f in form.visible_fields %}
+  <div class="f">
+    {% if f.field.widget.input_type == 'checkbox' %}<label>{{ f }} {{ f.label }}</label>{% else %}<label for="{{ f.id_for_label }}">{{ f.label }}{% if f.field.required %} *{% endif %}</label>{{ f }}{% endif %}
+    {% if f.help_text %}<div class="help">{{ f.help_text }}</div>{% endif %}
+    {{ f.errors }}
+  </div>
+  {% endfor %}
+  <div class="actions"><button class="btn">Salva</button> <a class="btn sec" href="{{ next }}">Annulla</a></div>
+</form></div>
+{% if obj %}
+<form method="post" action="{% url 'elimina' modello obj.pk %}" onsubmit="return confirm('Eliminare definitivamente?')">{% csrf_token %}
+  <input type="hidden" name="next" value="{{ next }}"><button class="link danger">Elimina questo record</button>
+</form>
+{% endif %}
+{% endblock %}

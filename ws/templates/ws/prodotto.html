@@ -1,0 +1,37 @@
+{% extends "ws/base.html" %}
+{% load humanize %}
+{% block title %}{{ p.codice }}{% endblock %}
+{% block content %}
+<div class="head"><div><h1>{{ p.nome }}</h1><div class="sub">{{ p.codice }} · <a href="{{ p.cliente.get_absolute_url }}">{{ p.cliente }}</a>{% if p.formato %} · {{ p.formato }}{% endif %}{% if p.progetto %} · progetto <a href="{{ p.progetto.get_absolute_url }}">{{ p.progetto.codice }}</a>{% endif %}</div></div>
+  <div class="actions"><a class="btn sec" href="{% url 'modifica' 'prodotto' p.pk %}">Modifica / cambia formula</a></div></div>
+
+{% for a in avvisi %}
+  {% if a.tipo == 'mancante' %}<div class="alert"><strong>{{ a.packaging.descrizione }}</strong> riporta l'INCI ma non ha un artwork con la versione della formula indicata: non è possibile verificare la coerenza.</div>
+  {% elif a.risolto %}<div class="alert ok"><strong>{{ a.packaging.descrizione }}</strong>: stampato con l'INCI di {{ a.stampata }}, si produce {{ a.attuale }}. Gestito con etichetta correttiva sul retro (cliente avvisato).</div>
+  {% else %}<div class="alert bad"><strong>INCI non allineato — {{ a.packaging.descrizione }}.</strong> Il pezzo è stampato con l'INCI di {{ a.stampata }}, ma la formula da produrre è {{ a.attuale }}. Giacenza: <strong>{{ a.giacenza|intcomma }} pezzi</strong>.<br>
+    Scegli come procedere: <a href="{% url 'modifica' 'prodotto' p.pk %}">continuare con {{ a.stampata }} fino a esaurimento</a> ·
+    <a href="{% url 'modifica' 'rigadistinta' a.riga.pk %}">avvisare il cliente e applicare un'etichetta correttiva</a> ·
+    <a href="{% url 'nuovo' 'movimento' %}?packaging={{ a.packaging.pk }}&tipo=scarto&quantita={{ a.giacenza }}&next={{ request.path }}">scartare la giacenza</a> e ristampare con un nuovo artwork.</div>
+  {% endif %}
+{% endfor %}
+
+<div class="grid g21"><div>
+  <div class="card"><div class="ch"><h2>Distinta base</h2><a class="btn sm" href="{% url 'nuovo' 'rigadistinta' %}?prodotto={{ p.pk }}">+ Componente</a></div>
+  {% if righe %}<div class="tw"><table><tr><th>Packaging</th><th>Decorazione</th><th>Artwork / INCI</th><th class="n">Per pezzo</th><th class="n">Giacenza</th><th></th></tr>
+  {% for r in righe %}<tr><td><strong>{{ r.packaging.codice }}</strong> · {{ r.packaging.descrizione }}<div class="small muted">{{ r.packaging.componente.get_tipo_display }} · {{ r.packaging.componente.descrizione }}</div></td>
+    <td>{{ r.packaging.get_decorazione_display }}{% if r.packaging.colore %}<div class="small muted">{{ r.packaging.colore }}</div>{% endif %}</td>
+    <td>{% if r.packaging.artwork %}{{ r.packaging.artwork }}{% else %}<span class="muted">—</span>{% endif %}
+      {% if r.packaging.riporta_inci %}<div class="small">INCI: {{ r.packaging.versione_formula_stampata|default:"non indicato" }}
+        {% if r.avviso and r.avviso.risolto %}<span class="badge warn">etichetta correttiva</span>{% elif r.avviso %}<span class="badge bad">non allineato</span>{% else %}<span class="badge ok">allineato</span>{% endif %}</div>{% endif %}</td>
+    <td class="n">{{ r.quantita_per_pezzo|floatformat:"-3" }}</td><td class="n">{{ r.giacenza|intcomma }}</td>
+    <td class="act"><a href="{% url 'modifica' 'rigadistinta' r.pk %}">modifica</a></td></tr>{% endfor %}</table></div>
+  {% else %}<div class="empty">Distinta vuota: aggiungi bombola o flacone, tappo, erogatore, etichette. I componenti si creano in <a href="{% url 'catalogo' %}">Packaging</a>.</div>{% endif %}</div>
+
+  <div class="card"><div class="ch"><h2>Ordini</h2></div>{% if ordini %}<div class="tw"><table><tr><th>Ordine</th><th>Data</th><th>Stato</th><th class="n">Quantità</th></tr>
+  {% for r in ordini %}<tr><td><a href="{{ r.ordine.get_absolute_url }}">{{ r.ordine.numero }}</a></td><td>{{ r.ordine.data|date:"d/m/Y" }}</td><td>{{ r.ordine.get_stato_display }}</td><td class="n">{{ r.quantita|intcomma }}</td></tr>{% endfor %}</table></div>{% else %}<div class="empty">Nessun ordine.</div>{% endif %}</div>
+</div><div>
+  <div class="card"><div class="ch"><h2>Formula da produrre</h2></div><div class="cb">
+    {% if p.versione_formula %}<p><strong>{{ p.versione_formula }}</strong> · {{ p.versione_formula.formula.nome }}</p><p class="inci">{{ p.versione_formula.inci }}</p>
+    {% else %}<p class="muted">Nessuna formula indicata.</p>{% endif %}</div></div>
+</div></div>
+{% endblock %}

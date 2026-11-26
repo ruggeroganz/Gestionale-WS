@@ -1,0 +1,41 @@
+{% load static %}<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Gestionale{% endblock %} · {{ NOME_AZIENDA }}</title>
+<link rel="stylesheet" href="{% static 'ws/app.css' %}">
+</head>
+<body>
+<div class="layout">
+  {% if user.is_authenticated %}
+  <nav class="side">
+    <div class="logo">{{ NOME_AZIENDA }}<small>Gestionale private label</small></div>
+    {% with n=request.resolver_match.url_name %}
+    <a href="{% url 'dashboard' %}" class="{% if n == 'dashboard' %}on{% endif %}">Cruscotto</a>
+    <div class="sep">Sviluppo</div>
+    <a href="{% url 'progetti' %}" class="{% if n == 'progetti' or n == 'progetto' %}on{% endif %}">Progetti</a>
+    <a href="{% url 'clienti' %}" class="{% if n == 'clienti' or n == 'cliente' %}on{% endif %}">Clienti</a>
+    <a href="{% url 'produttori' %}" class="{% if n == 'produttori' %}on{% endif %}">Produttori</a>
+    <a href="{% url 'formule' %}" class="{% if n == 'formule' %}on{% endif %}">Formule</a>
+    <a href="{% url 'listino' %}" class="{% if n == 'listino' %}on{% endif %}">Listino storico</a>
+    <div class="sep">Prodotti e ordini</div>
+    <a href="{% url 'prodotti' %}" class="{% if n == 'prodotti' or n == 'prodotto' %}on{% endif %}">Prodotti e distinte</a>
+    <a href="{% url 'catalogo' %}" class="{% if n == 'catalogo' %}on{% endif %}">Packaging</a>
+    <a href="{% url 'magazzino' %}" class="{% if n == 'magazzino' %}on{% endif %}">Magazzino packaging</a>
+    <a href="{% url 'ordini' %}" class="{% if n == 'ordini' or n == 'ordine' %}on{% endif %}">Ordini clienti</a>
+    {% endwith %}
+    <div class="user">
+      {{ user.get_full_name|default:user.username }}<br>
+      {% if user.is_staff %}<a href="{% url 'admin:index' %}" style="display:inline;padding:0">Amministrazione</a> · {% endif %}
+      <form class="inline" method="post" action="{% url 'logout' %}">{% csrf_token %}<button>Esci</button></form>
+    </div>
+  </nav>
+  {% endif %}
+  <main>
+    {% if messages %}<div class="msgs noprint">{% for m in messages %}<div class="alert {% if m.tags == 'error' %}bad{% elif m.tags == 'success' %}ok{% endif %}">{{ m }}</div>{% endfor %}</div>{% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+</body>
+</html>

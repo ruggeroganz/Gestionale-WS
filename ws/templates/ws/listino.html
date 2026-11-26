@@ -1,0 +1,13 @@
+{% extends "ws/base.html" %}
+{% load humanize %}
+{% block title %}Listino storico{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Listino storico</h1><div class="sub">Tutti i costi e i prezzi già quotati: per fare un'offerta senza richiedere ogni volta un nuovo brief al produttore.</div></div></div>
+<form class="search"><input class="q" name="q" value="{{ q }}" placeholder="Cerca: mousse, bombola 200 ml, produttore, formula…"><button class="btn sec">Cerca</button></form>
+<div class="card"><div class="tw"><table><tr><th>Data</th><th>Voce</th><th>Produttore</th><th>Formula</th><th class="n">Quantità</th><th class="n">Costo</th><th class="n">Prezzo</th><th class="n">Margine</th><th>Esito</th></tr>
+{% for r in righe %}<tr><td>{{ r.quotazione.data|date:"d/m/Y" }}</td><td>{{ r.descrizione }}<div class="small muted"><a href="{{ r.quotazione.progetto.get_absolute_url }}">{{ r.quotazione.progetto.nome }}</a> · {{ r.quotazione.progetto.cliente }}</div></td>
+  <td>{{ r.quotazione.progetto.produttore|default:"—" }}</td><td>{{ r.quotazione.versione_formula|default:"—" }}</td><td class="n">{{ r.quantita|intcomma }}</td>
+  <td class="n">{{ r.costo_unitario|floatformat:3 }} €</td><td class="n">{{ r.prezzo_unitario|floatformat:3 }} €</td><td class="n">{% if r.margine_pct != None %}{{ r.margine_pct|floatformat:1 }}%{% endif %}</td>
+  <td><span class="badge {% if r.quotazione.stato == 'accettata' %}ok{% elif r.quotazione.stato == 'rifiutata' %}bad{% endif %}">{{ r.quotazione.get_stato_display }}</span></td></tr>
+{% empty %}<tr><td colspan="9" class="muted">Nessuna voce trovata.</td></tr>{% endfor %}</table></div></div>
+{% endblock %}

@@ -1,0 +1,42 @@
+{% extends "ws/base.html" %}
+{% load humanize %}
+{% block title %}Cruscotto{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Cruscotto</h1><div class="sub">{{ n_aperti }} progetti aperti</div></div>
+  <div class="actions"><a class="btn" href="{% url 'nuovo' 'progetto' %}">+ Nuovo progetto</a></div></div>
+
+<div class="stats">{% for f in fasi %}<a class="stat" href="{% url 'progetti' %}"><b>{{ f.n }}</b><span>{{ f.nome }}</span></a>{% endfor %}</div>
+
+<div class="grid g2">
+<div>
+  <div class="card"><div class="ch"><h2>Packaging con INCI non allineato</h2><span class="badge {% if avvisi_inci %}bad{% else %}ok{% endif %}">{{ avvisi_inci|length }}</span></div>
+  {% if avvisi_inci %}<div class="tw"><table><tr><th>Prodotto</th><th>Packaging</th><th class="n">Giacenza</th></tr>
+  {% for a in avvisi_inci %}<tr><td><a href="{{ a.prodotto.get_absolute_url }}">{{ a.prodotto.codice }}</a><div class="small muted">{{ a.prodotto.cliente }}</div></td>
+    <td>{{ a.packaging.descrizione }}<div class="small muted">{% if a.tipo == 'diverso' %}stampato con {{ a.stampata }}, da produrre {{ a.attuale }}{% else %}artwork o INCI non indicato{% endif %}</div></td>
+    <td class="n">{{ a.giacenza|intcomma }}</td></tr>{% endfor %}</table></div>
+  {% else %}<div class="empty">Nessun conflitto tra formule e packaging stampato.</div>{% endif %}</div>
+
+  <div class="card"><div class="ch"><h2>Stabilità in corso</h2></div>
+  {% if stabilita %}<div class="tw"><table><tr><th>Progetto</th><th>Formula</th><th>Fine prevista</th><th class="n">Giorni</th></tr>
+  {% for t in stabilita %}<tr><td><a href="{{ t.progetto.get_absolute_url }}">{{ t.progetto.nome }}</a></td><td>{{ t.versione_formula }}</td><td>{{ t.data_fine_prevista|date:"d/m/Y" }}</td>
+    <td class="n">{% if t.scaduta %}<span class="badge bad">esito da registrare</span>{% else %}{{ t.giorni_rimanenti }}{% endif %}</td></tr>{% endfor %}</table></div>
+  {% else %}<div class="empty">Nessun test in corso.</div>{% endif %}</div>
+
+  <div class="card"><div class="ch"><h2>Progetti in ritardo sul piano</h2></div>
+  {% if in_ritardo %}<div class="tw"><table><tr><th>Progetto</th><th>Fase</th><th>Consegna richiesta</th></tr>
+  {% for p in in_ritardo %}<tr><td><a href="{{ p.get_absolute_url }}">{{ p.nome }}</a><div class="small muted">{{ p.cliente }}</div></td><td>{{ p.get_fase_display }}</td><td>{{ p.data_consegna_richiesta|date:"d/m/Y" }}</td></tr>{% endfor %}</table></div>
+  {% else %}<div class="empty">Tutti i progetti sono in linea con la data di consegna.</div>{% endif %}</div>
+</div>
+<div>
+  <div class="card"><div class="ch"><h2>In attesa del cliente</h2></div>
+  {% if quotazioni or campionature %}<div class="tw"><table><tr><th>Cosa</th><th>Progetto</th><th>Dal</th></tr>
+  {% for q in quotazioni %}<tr><td>Quotazione n. {{ q.numero }}</td><td><a href="{{ q.progetto.get_absolute_url }}">{{ q.progetto.nome }}</a><div class="small muted">{{ q.progetto.cliente }}</div></td><td>{{ q.data|date:"d/m/Y" }}</td></tr>{% endfor %}
+  {% for c in campionature %}<tr><td>Campionatura {{ c.numero }} ({{ c.versione_formula }})</td><td><a href="{{ c.progetto.get_absolute_url }}">{{ c.progetto.nome }}</a><div class="small muted">{{ c.progetto.cliente }}</div></td><td>{{ c.data_invio|date:"d/m/Y" }}</td></tr>{% endfor %}
+  </table></div>{% else %}<div class="empty">Niente in sospeso.</div>{% endif %}</div>
+
+  <div class="card"><div class="ch"><h2>Ultime attività</h2></div><div class="cb"><ul class="timeline">
+  {% for e in eventi %}<li><div class="when">{{ e.data|date:"d/m H:i" }} · <a href="{{ e.progetto.get_absolute_url }}">{{ e.progetto.codice }}</a>{% if e.utente %} · {{ e.utente.get_full_name|default:e.utente.username }}{% endif %}</div>{{ e.testo }}</li>
+  {% empty %}<li class="muted">Nessuna attività.</li>{% endfor %}</ul></div></div>
+</div>
+</div>
+{% endblock %}
