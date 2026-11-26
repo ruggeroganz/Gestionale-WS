@@ -31,6 +31,7 @@
     {% endwith %}
     <div class="user">
       {{ user.get_full_name|default:user.username }}<br>
+      <a href="{% url 'password' %}" style="display:inline;padding:0">Cambia password</a><br>
       {% if perms.ws.change_azienda %}<a href="{% url 'azienda' %}" style="display:inline;padding:0">Dati azienda</a> · {% endif %}
       {% if user.is_staff %}<a href="{% url 'admin:index' %}" style="display:inline;padding:0">Amministrazione</a> · {% endif %}
       <form class="inline" method="post" action="{% url 'logout' %}">{% csrf_token %}<button>Esci</button></form>

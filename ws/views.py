@@ -577,3 +577,12 @@ def azienda(request):
     if a is None:
         return redirect("nuovo", "azienda")
     return redirect("modifica", "azienda", a.pk)
+
+
+@login_required
+def allegato(request, percorso):
+    """File caricati (artwork): visibili solo dopo l'accesso."""
+    from django.conf import settings
+    from django.views.static import serve
+
+    return serve(request, percorso, document_root=settings.MEDIA_ROOT)

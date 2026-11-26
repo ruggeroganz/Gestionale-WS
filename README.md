@@ -30,6 +30,32 @@ primo utente con `python manage.py createsuperuser`.
 
 Test: `python manage.py test`.
 
+## Messa online
+
+Il progetto gira su qualunque hosting che esegua un container Docker (o
+un'app Python) con un database PostgreSQL. L'avvio (`avvio.sh`) aggiorna il
+database, crea il primo utente se non ce ne sono e lancia il server.
+
+Variabili d'ambiente da impostare sull'hosting:
+
+| Variabile | Valore |
+| --- | --- |
+| `DJANGO_DEBUG` | `0` |
+| `DJANGO_SECRET_KEY` | una stringa lunga e casuale, da tenere segreta |
+| `DJANGO_ALLOWED_HOSTS` | l'indirizzo del sito, es. `gestionale.miazienda.it` |
+| `DATABASE_URL` | l'indirizzo del database PostgreSQL fornito dall'hosting |
+| `ADMIN_PASSWORD` | password del primo utente `admin` (usata solo al primo avvio) |
+| `MEDIA_ROOT` | cartella su disco persistente per gli allegati, es. `/var/data` |
+
+Senza Docker: `pip install -r requirements.txt`, poi
+`python manage.py collectstatic --noinput` e `./avvio.sh`.
+
+Al primo accesso entrare come `admin`, cambiare la password, compilare «Dati
+azienda» e creare gli utenti da «Amministrazione → Utenti», assegnando a
+ciascuno il gruppo del suo ruolo. Gli allegati (artwork) sono visibili solo
+dopo l'accesso. Vanno previsti backup automatici del database e del disco
+degli allegati: di solito sono un'opzione dell'hosting.
+
 ## Come è organizzato
 
 | File | Contenuto |
