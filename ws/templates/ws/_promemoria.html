@@ -1,8 +1,7 @@
 {% comment %}Elenco promemoria aperti. Variabili: promemoria, mostra_contesto, nuovo_url{% endcomment %}
 <div class="card"><div class="ch"><h2>Da fare</h2><a class="btn sm" href="{{ nuovo_url }}">+ Promemoria</a></div>
-{% if promemoria %}<div class="tw"><table>
-{% for m in promemoria %}<tr><td style="width:1%"><form method="post" action="{% url 'promemoria_fatto' m.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><button class="btn sec sm" title="Segna come fatto">✓</button></form></td>
-  <td><a href="{% url 'modifica' 'promemoria' m.pk %}?next={{ request.path }}" style="color:inherit">{{ m.testo }}</a>
-    {% if mostra_contesto %}<div class="small muted">{% if m.progetto %}<a href="{{ m.progetto.get_absolute_url }}">{{ m.progetto.nome }}</a> · {% endif %}{% if m.cliente %}<a href="{{ m.cliente.get_absolute_url }}">{{ m.cliente }}</a>{% endif %}</div>{% endif %}</td>
-  <td class="n"><span class="badge {% if m.scaduto %}bad{% endif %}">{{ m.scadenza|date:"d/m/Y" }}</span>{% if m.assegnato_a %}<div class="small muted">{{ m.assegnato_a.get_full_name|default:m.assegnato_a.username }}</div>{% endif %}</td></tr>{% endfor %}
-</table></div>{% else %}<div class="empty">Niente da fare in sospeso.</div>{% endif %}</div>
+{% if promemoria %}<ul class="dafare">
+{% for m in promemoria %}<li><form method="post" action="{% url 'promemoria_fatto' m.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><button class="spunta" title="Segna come fatto" aria-label="Segna come fatto: {{ m.testo }}">✓</button></form>
+  <div><a class="testo" href="{% url 'modifica' 'promemoria' m.pk %}?next={{ request.path }}">{{ m.testo }}</a>
+    <div class="small muted"><span class="badge {% if m.scaduto %}bad{% endif %}">{{ m.scadenza|date:"d/m/Y" }}</span>{% if m.assegnato_a %} {{ m.assegnato_a.get_full_name|default:m.assegnato_a.username }}{% endif %}{% if mostra_contesto %}{% if m.progetto %} · <a href="{{ m.progetto.get_absolute_url }}">{{ m.progetto.nome }}</a>{% endif %}{% if m.cliente %} · <a href="{{ m.cliente.get_absolute_url }}">{{ m.cliente }}</a>{% endif %}{% endif %}</div></div></li>{% endfor %}
+</ul>{% else %}<div class="empty">Niente da fare in sospeso.</div>{% endif %}</div>

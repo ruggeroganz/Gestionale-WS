@@ -1,11 +1,11 @@
 {% extends "ws/base.html" %}
 {% block title %}Accedi{% endblock %}
 {% block content %}
-<div class="card login"><div class="ch"><h2>{{ NOME_AZIENDA }} · Accedi</h2></div>
+<div class="card login"><div class="ch"><div class="logo-login"><span class="mark">{{ NOME_AZIENDA|slice:":2"|upper }}</span>{{ NOME_AZIENDA }}</div></div>
 <form method="post" class="cb form">{% csrf_token %}
   {% if form.errors %}<div class="alert bad">Utente o password non corretti.</div>{% endif %}
-  <div class="f"><label>Utente</label>{{ form.username }}</div>
-  <div class="f"><label>Password</label>{{ form.password }}</div>
+  <div class="f"><label for="id_username">Utente</label>{{ form.username }}</div>
+  <div class="f"><label for="id_password">Password</label>{{ form.password }}</div>
   <input type="hidden" name="next" value="{{ next }}">
   <button class="btn">Accedi</button>
 </form></div>

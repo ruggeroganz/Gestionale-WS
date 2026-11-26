@@ -20,7 +20,7 @@
       <span class="badge {% if q.stato == 'accettata' %}ok{% elif q.stato == 'inviata' %}info{% elif q.stato == 'rifiutata' %}bad{% endif %}">{{ q.get_stato_display }}</span>
       {% if q.versione_formula %}<span class="badge">{{ q.versione_formula }}</span>{% endif %}
       {% if q.margine_pct != None %}<span class="muted small">margine {{ q.margine_pct|floatformat:1 }}%</span>{% endif %}
-      <span style="float:right"><a href="{% url 'quotazione_stampa' q.pk %}">offerta</a> · <a href="{% url 'modifica' 'quotazione' q.pk %}?next={{ request.path }}">modifica</a> ·
+      <span class="adx"><a href="{% url 'quotazione_stampa' q.pk %}">offerta</a> · <a href="{% url 'modifica' 'quotazione' q.pk %}?next={{ request.path }}">modifica</a> ·
         <form class="inline" method="post" action="{% url 'quotazione_duplica' q.pk %}">{% csrf_token %}<button class="link">nuova versione</button></form></span>
       {% if q.motivo %}<div class="small muted">Motivo revisione: {{ q.motivo }}</div>{% endif %}
     </div>
@@ -37,7 +37,7 @@
   <div class="card"><div class="ch"><h2>Formule</h2><a class="btn sm" href="{% url 'nuovo' 'formula' %}?progetto={{ p.pk }}{% if p.produttore_id %}&produttore={{ p.produttore_id }}{% endif %}&next={{ request.path }}">+ Formula</a></div>
   {% for f in formule %}
     <div class="cb" style="border-bottom:1px solid var(--line)"><strong>{{ f.codice }}</strong> · {{ f.nome }}
-      <span style="float:right"><a href="{% url 'nuovo' 'versioneformula' %}?formula={{ f.pk }}&next={{ request.path }}">+ nuova versione</a> · <a href="{% url 'modifica' 'formula' f.pk %}?next={{ request.path }}">modifica</a></span></div>
+      <span class="adx"><a href="{% url 'nuovo' 'versioneformula' %}?formula={{ f.pk }}&next={{ request.path }}">+ nuova versione</a> · <a href="{% url 'modifica' 'formula' f.pk %}?next={{ request.path }}">modifica</a></span></div>
     <div class="tw"><table><tr><th>Vers.</th><th>Data</th><th>INCI</th><th>Modifiche</th><th></th></tr>
     {% for v in f.versioni.all %}<tr><td><strong>v{{ v.numero }}</strong>{% if v == formula_approvata %} <span class="badge ok">approvata</span>{% endif %}</td><td>{{ v.data|date:"d/m/Y" }}</td><td class="inci">{{ v.inci }}</td><td class="small">{{ v.modifiche }}</td>
       <td class="act"><a href="{% url 'modifica' 'versioneformula' v.pk %}?next={{ request.path }}">modifica</a></td></tr>
