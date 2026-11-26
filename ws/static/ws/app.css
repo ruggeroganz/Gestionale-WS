@@ -137,3 +137,16 @@ form.inline { display: inline; }
 .doc .firma div { border-top: 1px solid var(--ink); padding-top: 6px; font-size: 12.5px; }
 table.fitta th, table.fitta td { padding-left: 9px; padding-right: 9px; }
 table.fitta th:first-child, table.fitta td:first-child { padding-left: 14px; }
+
+/* Schermi stretti: il menu passa sopra il contenuto */
+@media (max-width: 800px) {
+  .layout { flex-direction: column; }
+  .side { width: auto; height: auto; position: static; display: flex; flex-wrap: wrap; gap: 2px 4px; padding: 10px 12px; }
+  .side .logo { width: 100%; padding-bottom: 6px; }
+  .side .sep { display: none; }
+  .side a { padding: 5px 8px; }
+  .side .user { width: 100%; margin-top: 6px; }
+  main { padding: 16px 16px 48px; }
+  .doc { padding: 18px; }
+  .doc .parti, .doc .firma { grid-template-columns: 1fr; }
+}
