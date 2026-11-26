@@ -94,6 +94,14 @@ sollecitare al cliente (dalla «prossima consegna prevista» del prodotto, un
 lead time prima), TDS fermi da più di due settimane, fatture del produttore
 diverse dall'ordine d'acquisto.
 
+### Brief al produttore
+
+Nella scheda del produttore si carica il suo modulo di brief vuoto (Word con
+campi modulo). Dal progetto, «Compila nuovo brief» lo mostra come una pagina:
+il gestionale riconosce testi, caselle, menu e date, precompila ciò che sa dal
+progetto e scrive nel file solo i campi compilati (`ws/brief.py`). Il modulo
+del produttore non fa parte del codice: resta tra i file caricati.
+
 ### Prezzi
 
 Ogni voce di quotazione ha costo del produttore, nostri costi fissi per pezzo e

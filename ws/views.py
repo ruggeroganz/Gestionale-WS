@@ -15,6 +15,7 @@ from .models import (
     DDT,
     Artwork,
     Azienda,
+    Brief,
     Campionatura,
     Cliente,
     Componente,
@@ -46,7 +47,7 @@ from .models import (
 CRUD = {
     "cliente": (Cliente, ["ragione_sociale", "tipo", "stato", "partita_iva", "codice_fiscale", "indirizzo", "cap", "comune", "provincia", "codice_paese", "paese", "codice_sdi", "pec", "pagamento", "email", "telefono", "commerciale", "note"]),
     "contatto": (Contatto, ["cliente", "nome", "ruolo", "email", "telefono"]),
-    "produttore": (Produttore, ["nome", "paese", "indirizzo", "partita_iva", "lead_time_giorni", "email", "telefono", "note"]),
+    "produttore": (Produttore, ["nome", "paese", "indirizzo", "partita_iva", "modello_brief", "lead_time_giorni", "email", "telefono", "note"]),
     "progetto": (Progetto, ["nome", "cliente", "produttore", "tipo_prodotto", "sviluppo", "versione_formula", "responsabile", "quantita_prevista", "prezzo_target", "data_consegna_richiesta", "lead_time_giorni", "campione_packaging", "stato", "brief"]),
     "formula": (Formula, ["codice", "nome", "produttore", "progetto", "categoria"]),
     "versioneformula": (VersioneFormula, ["formula", "inci", "modifiche", "data"]),
@@ -297,6 +298,7 @@ def progetto(request, pk):
             "ordini": p.ordini.prefetch_related("righe"),
             "eventi": p.eventi.select_related("utente")[:40],
             "promemoria": p.promemoria.filter(fatto=False).select_related("assegnato_a"),
+            "brief": p.brief_produttore.all(),
         },
     )
 
@@ -748,4 +750,121 @@ def pdf(request, tipo, pk):
     nome, contenuto = crea_pdf(request, tipo, obj)
     risposta = HttpResponse(contenuto, content_type="application/pdf")
     risposta["Content-Disposition"] = f'inline; filename="{nome}"'
+    return risposta
+
+
+# --------------------------------------------------------------------------
+# Brief al produttore
+# --------------------------------------------------------------------------
+def _precompila_brief(campi, progetto):
+    """Valori iniziali presi dal progetto, riconoscendo i campi dall'etichetta."""
+    az = Azienda.corrente()
+    regole = [
+        ("CUSTOMER", az.ragione_sociale),
+        ("PROJECT NAME", progetto.nome),
+        ("DESCRIPTION", progetto.brief),
+        ("LAUNCH DATE", progetto.data_consegna_richiesta.strftime("%d/%m/%Y") if progetto.data_consegna_richiesta else ""),
+        ("TARGET PRICE", f"{progetto.prezzo_target:.2f} EUR".replace(".", ",") if progetto.prezzo_target else ""),
+        ("MARKET", progetto.cliente.paese),
+        ("MOQ", str(progetto.quantita_prevista or "")),
+        ("DATE", flusso.oggi().strftime("%d/%m/%Y")),
+    ]
+    valori = {}
+    for c in campi:
+        if c.tipo == "casella":
+            continue
+        etichetta = c.etichetta.upper()
+        for chiave, valore in regole:
+            if valore and (etichetta == chiave or (chiave != "DATE" and etichetta.startswith(chiave))):
+                valori[c.chiave] = valore
+                break
+    return valori
+
+
+@richiede("add", Brief)
+@require_POST
+def brief_nuovo(request, pk):
+    from django.core.files.base import ContentFile
+
+    from . import brief as modulo
+
+    p = get_object_or_404(Progetto.objects.select_related("produttore", "cliente"), pk=pk)
+    if not p.produttore_id or not p.produttore.modello_brief:
+        messages.error(request, "Carica prima il modello del brief (file Word vuoto) nella scheda del produttore.")
+        return redirect(p)
+    with p.produttore.modello_brief.open("rb") as f:
+        dati = f.read()
+    try:
+        campi = modulo.analizza(dati)
+    except modulo.BriefError as e:
+        messages.error(request, str(e))
+        return redirect(p)
+    b = Brief(progetto=p, valori=_precompila_brief(campi, p))
+    b.modello.save(f"modello-{p.codice}.docx", ContentFile(dati), save=False)
+    b.save()
+    flusso.dopo_salvataggio(b, request.user, creato=True)
+    return redirect(b)
+
+
+def _campi_brief(b):
+    from . import brief as modulo
+
+    with b.modello.open("rb") as f:
+        dati = f.read()
+    return dati, modulo.analizza(dati)
+
+
+@login_required
+def brief(request, pk):
+    from . import brief as modulo
+
+    b = get_object_or_404(Brief.objects.select_related("progetto__cliente", "progetto__produttore"), pk=pk)
+    _, campi = _campi_brief(b)
+    if request.method == "POST":
+        if not puo(request.user, "change", Brief):
+            return _negato(request, b.get_absolute_url())
+        valori = {}
+        for c in campi:
+            if c.tipo == "casella":
+                if request.POST.get(c.chiave):
+                    valori[c.chiave] = True
+            else:
+                testo = request.POST.get(c.chiave, "").strip()
+                if testo and (c.tipo != "menu" or testo in c.opzioni):
+                    valori[c.chiave] = testo
+        b.valori = valori
+        b.stato = request.POST.get("stato") if request.POST.get("stato") in Brief.Stato.values else b.stato
+        b.note = request.POST.get("note", "")
+        if b.stato != Brief.Stato.BOZZA and not b.data_invio:
+            b.data_invio = flusso.oggi()
+        b.save()
+        flusso.dopo_salvataggio(b, request.user)
+        messages.success(request, "Brief salvato.")
+        if request.POST.get("azione") == "scarica":
+            return redirect("brief_scarica", b.pk)
+        return redirect(b)
+    for c in campi:
+        c.valore = b.valori.get(c.chiave, False if c.tipo == "casella" else "")
+    compilati = sum(1 for c in campi if c.valore)
+    return render(
+        request,
+        "ws/brief.html",
+        {"b": b, "sezioni": modulo.sezioni(campi), "compilati": compilati, "totale": len(campi), "stati": Brief.Stato.choices},
+    )
+
+
+@login_required
+def brief_scarica(request, pk):
+    from django.http import HttpResponse
+
+    from . import brief as modulo
+
+    b = get_object_or_404(Brief.objects.select_related("progetto"), pk=pk)
+    dati, _ = _campi_brief(b)
+    risposta = HttpResponse(
+        modulo.compila(dati, b.valori),
+        content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
+    nome = "".join(ch if ch.isalnum() or ch in " -_" else " " for ch in b.progetto.nome).strip()
+    risposta["Content-Disposition"] = f'attachment; filename="Technical Brief {nome}.docx"'
     return risposta

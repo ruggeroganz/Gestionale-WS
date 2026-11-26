@@ -12,6 +12,14 @@
 
 <div class="grid g21">
 <div>
+  {# ---------------- Brief ---------------- #}
+  <div class="card"><div class="ch"><h2>Brief al produttore</h2><form class="inline" method="post" action="{% url 'brief_nuovo' p.pk %}">{% csrf_token %}<button class="btn sm">+ Compila nuovo brief</button></form></div>
+  {% if brief %}<div class="tw"><table><tr><th>Brief</th><th>Creato</th><th>Stato</th><th></th></tr>
+  {% for b in brief %}<tr><td><a href="{{ b.get_absolute_url }}">Brief n. {{ b.numero }}</a></td><td>{{ b.creato|date:"d/m/Y" }}</td><td><span class="badge {% if b.stato == 'risposta' %}ok{% elif b.stato == 'inviato' %}info{% endif %}">{{ b.get_stato_display }}</span>{% if b.data_invio %}<div class="small muted">inviato il {{ b.data_invio|date:"d/m/Y" }}</div>{% endif %}</td>
+    <td class="act"><a href="{% url 'brief_scarica' b.pk %}">scarica Word</a></td></tr>{% endfor %}</table></div>
+  {% else %}<div class="empty">Compila qui i campi che servono: il gestionale li inserisce nel modulo Word del produttore, pronto da inviare.{% if p.produttore and not p.produttore.modello_brief %} Prima va caricato il modulo vuoto nella <a href="{% url 'modifica' 'produttore' p.produttore.pk %}?next={{ request.path }}">scheda del produttore</a>.{% endif %}</div>{% endif %}
+  </div>
+
   {# ---------------- Quotazioni ---------------- #}
   <div class="card"><div class="ch"><h2>Quotazioni</h2><a class="btn sm" href="{% url 'nuovo' 'quotazione' %}?progetto={{ p.pk }}&next={{ request.path }}">+ Quotazione</a></div>
   {% for q in quotazioni %}

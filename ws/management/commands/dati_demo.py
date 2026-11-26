@@ -6,10 +6,14 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.management.base import BaseCommand, CommandError
 
+from django.core.files.base import ContentFile
+
+from ws import brief as modulo_brief
 from ws import documenti, flusso
 from ws.models import (
     Artwork,
     Azienda,
+    Brief,
     Campionatura,
     Cliente,
     Componente,
@@ -146,6 +150,13 @@ class Command(BaseCommand):
 
         # --- Progetto 5: lead con data di consegna troppo vicina
         Progetto.objects.create(nome="Lacca forte 300 ml", cliente=aur, tipo_prodotto="Lacca capelli", fase="lead", responsabile=utenti["commerciale"], quantita_prevista=10000, data_consegna_richiesta=giorni(170), brief="Richiesta ricevuta in fiera, da assegnare a un produttore.")
+
+        # --- Brief al produttore, su un modulo dimostrativo
+        modello = modulo_brief.modello_dimostrativo()
+        bio.modello_brief.save("modulo-brief-demo.docx", ContentFile(modello))
+        b = Brief(progetto=p4, stato="risposta", data_invio=giorni(-50), valori={"c2": "WS Srl (demo)", "c4": p4.nome, "c7": "Italia", "c8": "6000", "c10": True, "c13": True, "c16": "PRODUTTORE"})
+        b.modello.save("modello-demo.docx", ContentFile(modello), save=False)
+        b.save()
 
         # --- Listino e promemoria
         for riga in list(q1.righe.filter(tipo="prodotto")) + list(q3.righe.all()) + list(q4.righe.all()):

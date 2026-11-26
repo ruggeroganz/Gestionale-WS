@@ -5,6 +5,7 @@ from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
 
+from . import brief as modulo_brief
 from . import documenti, flusso
 from .ruoli import AMMINISTRAZIONE, COMMERCIALE, CUSTOMER
 from .models import (
@@ -288,6 +289,9 @@ class PagineTest(TestCase):
         urls += [p.get_absolute_url() for p in Prodotto.objects.all()]
         for o in OrdineCliente.objects.all():
             urls += [o.get_absolute_url(), reverse("ordine_stampa", args=[o.pk])]
+        from .models import Brief
+
+        urls += [b.get_absolute_url() for b in Brief.objects.all()]
         for modello in (OrdineAcquisto, DDT, PreFattura):
             urls += [d.get_absolute_url() for d in modello.objects.all()]
         for nome, (modello, _) in CRUD.items():
@@ -623,3 +627,101 @@ class ImpiantiScadenzePdfTest(DocumentiTest):
                 self.assertEqual((r.status_code, r["Content-Type"]), (200, "application/pdf"))
                 self.assertTrue(r.content.startswith(b"%PDF"))
                 self.assertIn(".pdf", r["Content-Disposition"])
+
+
+class BriefTest(TestCase):
+    def setUp(self):
+        self.modello = modulo_brief.modello_dimostrativo()
+        self.campi = modulo_brief.analizza(self.modello)
+        self.per_etichetta = {c.etichetta: c for c in self.campi}
+
+    def test_riconosce_campi_ed_etichette(self):
+        self.assertEqual(
+            [(c.tipo, c.etichetta) for c in self.campi[:9]],
+            [("menu", "KAM"), ("data", "DATE"), ("testo", "CUSTOMER"), ("testo", "DESCRIPTION"), ("testo", "PROJECT NAME"),
+             ("data", "LAUNCH DATE"), ("cella", "TARGET PRICE*"), ("testo", "MARKET"), ("testo", "MOQ")],
+        )  # fmt: skip
+        self.assertEqual(self.per_etichetta["KAM"].opzioni, ["ROSSI", "BIANCHI"])
+        self.assertEqual(self.per_etichetta["DESCRIPTION"].sezione, "IF NEW")
+        self.assertEqual((self.per_etichetta["LABEL"].tipo, self.per_etichetta["LABEL"].gruppo), ("casella", "SECONDARY PACK"))
+        self.assertIn("PATCH TEST · BF/Customer", self.per_etichetta)  # riga di dettaglio abbinata alla casella
+        self.assertTrue(all(not c.valore for c in self.campi))  # i segnaposto non sono valori
+
+    def test_compila_solo_i_campi_indicati(self):
+        e = self.per_etichetta
+        valori = {
+            e["KAM"].chiave: "BIANCHI", e["PROJECT NAME"].chiave: "Mousse è & <prova>\nseconda riga",
+            e["TARGET PRICE*"].chiave: "1,60 EUR", e["LABEL"].chiave: True, e["PATCH TEST · BF/Customer"].chiave: "CLIENTE",
+        }  # fmt: skip
+        compilato = modulo_brief.compila(self.modello, valori)
+        import io, zipfile
+
+        xml = zipfile.ZipFile(io.BytesIO(compilato)).read("word/document.xml").decode()
+        for atteso in ("BIANCHI", "Mousse è &amp; &lt;prova&gt;", "seconda riga", "1,60 EUR", "CLIENTE", "☒"):
+            self.assertIn(atteso, xml)
+        self.assertEqual(xml.count("☒"), 1)
+        self.assertEqual(xml.count('w14:val="1"'), 1)
+        # i campi non compilati restano segnaposto, come nel modulo vuoto
+        self.assertEqual(xml.count("<w:showingPlcHdr/>"), self.modello_segnaposto() - 3)
+        riletti = {c.etichetta: c.valore for c in modulo_brief.analizza(compilato)}
+        self.assertEqual((riletti["KAM"], riletti["LABEL"], riletti["LEAFLET"], riletti["MARKET"]), ("BIANCHI", True, False, ""))
+
+    def modello_segnaposto(self):
+        import io, zipfile
+
+        return zipfile.ZipFile(io.BytesIO(self.modello)).read("word/document.xml").decode().count("<w:showingPlcHdr/>")
+
+    def test_file_non_valido(self):
+        with self.assertRaises(modulo_brief.BriefError):
+            modulo_brief.analizza(b"non sono un docx")
+
+
+class BriefPagineTest(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        call_command("dati_demo", verbosity=0)
+
+    def setUp(self):
+        self.client.force_login(get_user_model().objects.get(username="commerciale"))
+
+    def test_nuovo_brief_precompilato_salvato_e_scaricato(self):
+        from .models import Brief
+
+        p = Progetto.objects.get(nome__startswith="Shampoo")
+        r = self.client.post(reverse("brief_nuovo", args=[p.pk]))
+        b = Brief.objects.get(progetto=p)
+        self.assertRedirects(r, b.get_absolute_url())
+        campi = {c.etichetta: c.chiave for c in modulo_brief.analizza(b.modello.read())}
+        self.assertEqual(b.valori[campi["PROJECT NAME"]], p.nome)
+        self.assertEqual(b.valori[campi["MOQ"]], "12000")
+        self.assertEqual(b.valori[campi["TARGET PRICE*"]], "1,60 EUR")
+        self.assertIn(campi["DATE"], b.valori)
+        self.assertNotIn(campi["LAUNCH DATE"], [k for k, v in b.valori.items() if v == b.valori[campi["DATE"]] and k != campi["DATE"]])
+
+        dati = {campi["PROJECT NAME"]: "Shampoo senza SLES", campi["LABEL"]: "1", campi["KAM"]: "valore non previsto", "stato": "inviato", "note": "x", "azione": "scarica"}
+        r = self.client.post(b.get_absolute_url(), dati)
+        self.assertRedirects(r, reverse("brief_scarica", args=[b.pk]), fetch_redirect_response=False)
+        b.refresh_from_db()
+        self.assertEqual(b.valori, {campi["PROJECT NAME"]: "Shampoo senza SLES", campi["LABEL"]: True})  # il menu accetta solo le sue opzioni
+        self.assertEqual((b.stato, b.data_invio), ("inviato", oggi()))
+        r = self.client.get(reverse("brief_scarica", args=[b.pk]))
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("Technical Brief Shampoo delicato 250 ml.docx", r["Content-Disposition"])
+        riletti = {c.etichetta: c.valore for c in modulo_brief.analizza(r.content)}
+        self.assertEqual((riletti["PROJECT NAME"], riletti["LABEL"], riletti["CUSTOMER"]), ("Shampoo senza SLES", True, ""))
+
+    def test_senza_modello_avvisa(self):
+        p = Progetto.objects.get(nome__startswith="Deodorante")  # produttore senza modulo caricato
+        r = self.client.post(reverse("brief_nuovo", args=[p.pk]), follow=True)
+        self.assertContains(r, "Carica prima il modello del brief")
+
+    def test_amministrazione_non_modifica_il_brief(self):
+        from .models import Brief
+
+        b = Brief.objects.first()
+        self.client.force_login(get_user_model().objects.get(username="amministrazione"))
+        self.assertEqual(self.client.get(b.get_absolute_url()).status_code, 200)
+        prima = dict(b.valori)
+        self.client.post(b.get_absolute_url(), {"stato": "bozza"})
+        b.refresh_from_db()
+        self.assertEqual(b.valori, prima)

@@ -1,0 +1,26 @@
+{% extends "ws/base.html" %}
+{% block title %}{{ b }}{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Brief n. {{ b.numero }} · {{ b.progetto.nome }}</h1>
+  <div class="sub"><a href="{{ b.progetto.get_absolute_url }}">{{ b.progetto.codice }}</a> · {{ b.progetto.produttore }} · {{ compilati }} campi compilati su {{ totale }} · compila solo quelli che servono, gli altri restano come nel modulo</div></div>
+  <div class="actions"><a class="btn sec" href="{% url 'brief_scarica' b.pk %}">Scarica il Word compilato</a></div></div>
+<form method="post" class="brief">{% csrf_token %}
+{% for s in sezioni %}
+<div class="card">{% if s.nome %}<div class="ch"><h2>{{ s.nome }}</h2></div>{% endif %}<div class="cb griglia-brief">
+  {% for v in s.voci %}
+    {% if v.tipo == "caselle" %}<fieldset class="caselle"><legend>{{ v.gruppo|default:"Opzioni" }}</legend>
+      {% for c in v.caselle %}<label><input type="checkbox" name="{{ c.chiave }}" id="id_{{ c.chiave }}" value="1" {% if c.valore %}checked{% endif %}> {{ c.etichetta }}</label>{% endfor %}</fieldset>
+    {% else %}{% with c=v.campo %}<div class="f {% if c.tipo == 'testo' or c.tipo == 'cella' %}largo{% endif %}"><label for="id_{{ c.chiave }}">{{ c.etichetta }}</label>
+      {% if c.tipo == "menu" %}<select name="{{ c.chiave }}" id="id_{{ c.chiave }}"><option value="">—</option>{% for o in c.opzioni %}<option {% if o == c.valore %}selected{% endif %}>{{ o }}</option>{% endfor %}</select>
+      {% elif c.tipo == "data" %}<input type="text" name="{{ c.chiave }}" id="id_{{ c.chiave }}" value="{{ c.valore }}" placeholder="gg/mm/aaaa">
+      {% else %}<textarea name="{{ c.chiave }}" id="id_{{ c.chiave }}" rows="1">{{ c.valore }}</textarea>{% endif %}</div>{% endwith %}{% endif %}
+  {% endfor %}
+</div></div>
+{% endfor %}
+<div class="card form" style="max-width:none"><div class="cb griglia-brief">
+  <div class="f"><label for="id_stato">Stato</label><select name="stato" id="id_stato">{% for v, n in stati %}<option value="{{ v }}" {% if v == b.stato %}selected{% endif %}>{{ n }}</option>{% endfor %}</select></div>
+  <div class="f largo"><label for="id_note">Note interne (non finiscono nel brief)</label><textarea name="note" id="id_note" rows="1">{{ b.note }}</textarea></div>
+</div></div>
+<div class="actions barra-salva"><button class="btn" name="azione" value="salva">Salva</button><button class="btn sec" name="azione" value="scarica">Salva e scarica il Word</button><a class="btn sec" href="{{ b.progetto.get_absolute_url }}">Torna al progetto</a></div>
+</form>
+{% endblock %}

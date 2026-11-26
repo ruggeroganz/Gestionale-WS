@@ -263,3 +263,18 @@ form.inline { display: inline; }
 /* azioni a destra nelle intestazioni di riga (quotazioni, formule) */
 .adx { float: right; margin-left: 12px; }
 @media (max-width: 860px) { .adx { float: none; display: block; margin: 4px 0 0; } }
+
+/* ---------- Brief ---------- */
+.card > .cb.griglia-brief { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 16px; }
+.griglia-brief .f { margin: 0; }
+.griglia-brief .largo, .griglia-brief .caselle { grid-column: 1 / -1; }
+.brief label { display: block; font-weight: 600; font-size: 12.5px; margin-bottom: 4px; color: var(--ink-2); }
+.brief input[type=text], .brief select, .brief textarea { width: 100%; padding: 8px 11px; border: 1px solid var(--line-2); border-radius: var(--r-sm); font: inherit; background: var(--surface); color: var(--ink); }
+.brief textarea { min-height: 38px; resize: vertical; field-sizing: content; }
+.brief input:focus, .brief select:focus, .brief textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.caselle { border: 1px solid var(--line); border-radius: var(--r-sm); padding: 8px 12px 10px; margin: 0; display: flex; flex-wrap: wrap; gap: 6px 18px; min-width: 0; }
+.caselle legend { font-size: 12.5px; font-weight: 600; color: var(--ink-2); padding: 0 6px; }
+.caselle label { display: inline-flex; align-items: center; gap: 6px; font-weight: 450; margin: 0; color: var(--ink); }
+.caselle input { accent-color: var(--accent); width: 15px; height: 15px; }
+.barra-salva { position: sticky; bottom: 0; padding: 12px 0; background: linear-gradient(to top, var(--bg) 70%, transparent); }
+@media (max-width: 860px) { .griglia-brief { grid-template-columns: minmax(0, 1fr); } }

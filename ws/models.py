@@ -107,6 +107,12 @@ class Produttore(models.Model):
     )
     indirizzo = models.CharField(max_length=250, blank=True)
     partita_iva = models.CharField("partita IVA", max_length=30, blank=True)
+    modello_brief = models.FileField(
+        "modello del brief (Word)",
+        upload_to="modelli/",
+        blank=True,
+        help_text="Il modulo vuoto del produttore, in formato .docx: il gestionale lo compila con i dati del brief.",
+    )
     email = models.EmailField(blank=True)
     telefono = models.CharField(max_length=40, blank=True)
     note = models.TextField(blank=True)
@@ -1178,3 +1184,41 @@ class Promemoria(models.Model):
     @property
     def scaduto(self):
         return not self.fatto and self.scadenza < oggi()
+
+
+# --------------------------------------------------------------------------
+# Brief al produttore
+# --------------------------------------------------------------------------
+class Brief(models.Model):
+    """Richiesta d'offerta al produttore, compilata sul suo modulo Word."""
+
+    class Stato(models.TextChoices):
+        BOZZA = "bozza", "In compilazione"
+        INVIATO = "inviato", "Inviato al produttore"
+        RISPOSTA = "risposta", "Offerta del produttore ricevuta"
+
+    progetto = models.ForeignKey(Progetto, on_delete=models.CASCADE, related_name="brief_produttore")
+    numero = models.PositiveIntegerField(editable=False)
+    modello = models.FileField(upload_to="brief/", editable=False)
+    valori = models.JSONField(default=dict, blank=True, editable=False)
+    stato = models.CharField(max_length=20, choices=Stato.choices, default=Stato.BOZZA)
+    data_invio = models.DateField(null=True, blank=True)
+    risposta = models.FileField("offerta ricevuta dal produttore", upload_to="brief/", blank=True)
+    note = models.TextField(blank=True)
+    creato = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["progetto", "-numero"]
+        verbose_name = "brief"
+        verbose_name_plural = "brief"
+
+    def __str__(self):
+        return f"Brief {self.progetto.codice}/{self.numero}"
+
+    def save(self, *args, **kwargs):
+        if not self.numero:
+            self.numero = _prossimo_numero(Brief.objects.filter(progetto=self.progetto))
+        super().save(*args, **kwargs)
+
+    def get_absolute_url(self):
+        return reverse("brief", args=[self.pk])

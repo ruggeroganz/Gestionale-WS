@@ -10,7 +10,7 @@ COMMERCIALE = "Commerciale"
 CUSTOMER = "Customer service e acquisti"
 AMMINISTRAZIONE = "Amministrazione"
 
-_SVILUPPO = ["progetto", "evento", "quotazione", "rigaquotazione", "campionatura", "vocelistino", "promemoria"]
+_SVILUPPO = ["progetto", "evento", "quotazione", "rigaquotazione", "campionatura", "vocelistino", "promemoria", "brief"]
 _ANAGRAFICA_CLIENTI = ["cliente", "contatto"]
 _TECNICO = ["formula", "versioneformula", "teststabilita", "componente", "artwork", "packaging", "prodotto", "rigadistinta"]
 _ORDINI = ["ordinecliente", "rigaordine"]
