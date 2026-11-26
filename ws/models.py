@@ -985,3 +985,81 @@ class RigaPreFattura(models.Model):
     @property
     def totale(self):
         return euro(self.quantita * self.prezzo_unitario)
+
+
+# --------------------------------------------------------------------------
+# Listino prezzi e promemoria
+# --------------------------------------------------------------------------
+class VoceListino(models.Model):
+    """Prezzo di riferimento per fare un'offerta senza richiedere un nuovo brief al produttore."""
+
+    produttore = models.ForeignKey(Produttore, on_delete=models.PROTECT, related_name="listino")
+    formula = models.ForeignKey(Formula, null=True, blank=True, on_delete=models.SET_NULL, related_name="listino")
+    tipo = models.CharField(max_length=20, choices=RigaQuotazione.Tipo.choices, default=RigaQuotazione.Tipo.PRODOTTO)
+    descrizione = models.CharField(max_length=250, help_text="Formula e packaging, es. Mousse 200 ml, bombola litografata.")
+    quantita_minima = models.PositiveIntegerField("da (pezzi)", default=1, help_text="Scaglione: il prezzo vale da questa quantità.")
+    costo_unitario = models.DecimalField("costo dal produttore (€)", max_digits=12, decimal_places=4, default=0)
+    prezzo_unitario = models.DecimalField("prezzo consigliato al cliente (€)", max_digits=12, decimal_places=4, default=0)
+    valido_dal = models.DateField(default=oggi)
+    valido_fino = models.DateField(null=True, blank=True, help_text="Lasciare vuoto se non ha scadenza.")
+    origine = models.ForeignKey(
+        RigaQuotazione, null=True, blank=True, on_delete=models.SET_NULL, related_name="voci_listino", editable=False
+    )
+    note = models.CharField(max_length=250, blank=True)
+
+    class Meta:
+        ordering = ["produttore", "descrizione", "quantita_minima"]
+        verbose_name = "voce di listino"
+        verbose_name_plural = "voci di listino"
+
+    def __str__(self):
+        return f"{self.descrizione} (da {self.quantita_minima} pz)"
+
+    def get_absolute_url(self):
+        return reverse("listino")
+
+    @property
+    def scaduta(self):
+        return self.valido_fino is not None and self.valido_fino < oggi()
+
+    @property
+    def margine_pct(self):
+        return (
+            (self.prezzo_unitario - self.costo_unitario) / self.prezzo_unitario * 100 if self.prezzo_unitario else None
+        )
+
+
+class Promemoria(models.Model):
+    """Cosa fare e entro quando, su un cliente o un progetto (richiamare, sollecitare, inviare...)."""
+
+    testo = models.CharField("cosa fare", max_length=250)
+    scadenza = models.DateField(default=oggi)
+    cliente = models.ForeignKey(Cliente, null=True, blank=True, on_delete=models.CASCADE, related_name="promemoria")
+    progetto = models.ForeignKey(Progetto, null=True, blank=True, on_delete=models.CASCADE, related_name="promemoria")
+    assegnato_a = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="promemoria"
+    )
+    fatto = models.BooleanField(default=False)
+    creato = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["fatto", "scadenza", "pk"]
+        verbose_name = "promemoria"
+        verbose_name_plural = "promemoria"
+
+    def __str__(self):
+        return self.testo
+
+    def save(self, *args, **kwargs):
+        if self.progetto_id and not self.cliente_id:
+            self.cliente = self.progetto.cliente
+        super().save(*args, **kwargs)
+
+    def get_absolute_url(self):
+        if self.progetto_id:
+            return self.progetto.get_absolute_url()
+        return self.cliente.get_absolute_url() if self.cliente_id else reverse("dashboard")
+
+    @property
+    def scaduto(self):
+        return not self.fatto and self.scadenza < oggi()

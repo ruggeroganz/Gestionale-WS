@@ -5,6 +5,7 @@ from django.db.models import Count, ProtectedError, Q
 from django.forms import modelform_factory
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
@@ -25,6 +26,7 @@ from .models import (
     OrdineCliente,
     Packaging,
     PreFattura,
+    Promemoria,
     Prodotto,
     Produttore,
     Progetto,
@@ -37,6 +39,7 @@ from .models import (
     RigaQuotazione,
     TestStabilita,
     VersioneFormula,
+    VoceListino,
 )
 
 # Modelli modificabili dall'interfaccia con il form generico: nome -> (modello, campi)
@@ -59,6 +62,8 @@ CRUD = {
     "movimento": (MovimentoPackaging, ["packaging", "produttore", "data", "tipo", "quantita", "note"]),
     "ordine": (OrdineCliente, ["cliente", "progetto", "produttore", "data", "data_consegna_prevista", "stato", "riferimento_cliente", "note"]),
     "rigaordine": (RigaOrdine, ["ordine", "prodotto", "quantita", "prezzo_unitario"]),
+    "vocelistino": (VoceListino, ["produttore", "formula", "tipo", "descrizione", "quantita_minima", "costo_unitario", "prezzo_unitario", "valido_dal", "valido_fino", "note"]),
+    "promemoria": (Promemoria, ["testo", "scadenza", "cliente", "progetto", "assegnato_a", "fatto"]),
     "azienda": (Azienda, ["ragione_sociale", "partita_iva", "codice_fiscale", "regime_fiscale", "indirizzo", "cap", "comune", "provincia", "codice_paese", "iban", "email", "telefono"]),
     "acquisto": (OrdineAcquisto, ["produttore", "ordine", "data", "data_consegna_richiesta", "stato", "ddt_fornitore", "fattura_fornitore", "importo_fattura_fornitore", "note"]),
     "rigaacquisto": (RigaAcquisto, ["ordine_acquisto", "tipo", "descrizione", "quantita", "costo_unitario"]),
@@ -230,6 +235,7 @@ def dashboard(request):
                 esito=Campionatura.Esito.ATTESA, progetto__stato=Progetto.Stato.APERTO
             ).select_related("progetto__cliente", "versione_formula__formula"),
             "eventi": Evento.objects.select_related("progetto", "utente")[:12],
+            "promemoria": Promemoria.objects.filter(fatto=False).select_related("cliente", "progetto", "assegnato_a")[:30],
         },
     )
 
@@ -266,6 +272,7 @@ def progetto(request, pk):
         "ws/progetto.html",
         {
             "p": p,
+            "pk_testo": str(p.pk),
             "fasi": fasi,
             "fasi_precedenti": fasi[:i],
             "controlli": controlli,
@@ -282,6 +289,7 @@ def progetto(request, pk):
             "prodotti": p.prodotti.select_related("versione_formula__formula"),
             "ordini": p.ordini.prefetch_related("righe"),
             "eventi": p.eventi.select_related("utente")[:40],
+            "promemoria": p.promemoria.filter(fatto=False).select_related("assegnato_a"),
         },
     )
 
@@ -341,10 +349,12 @@ def cliente(request, pk):
         "ws/cliente.html",
         {
             "c": c,
+            "pk_testo": str(c.pk),
             "progetti": c.progetti.select_related("produttore"),
             "prodotti": c.prodotti.select_related("versione_formula__formula"),
             "ordini": c.ordini.prefetch_related("righe")[:20],
             "giacenze": flusso.giacenze(c),
+            "promemoria": c.promemoria.filter(fatto=False).select_related("progetto", "assegnato_a"),
         },
     )
 
@@ -423,7 +433,19 @@ def magazzino(request):
 @login_required
 def listino(request):
     q = request.GET.get("q", "").strip()
-    return render(request, "ws/listino.html", {"righe": flusso.listino(q)[:300], "q": q})
+    scadute = request.GET.get("scadute") == "1"
+    quotazione = Quotazione.objects.filter(pk=request.GET.get("quotazione") or 0).select_related("progetto").first()
+    return render(
+        request,
+        "ws/listino.html",
+        {
+            "voci": flusso.voci_listino(q, scadute),
+            "righe": flusso.listino(q)[:300],
+            "q": q,
+            "scadute": scadute,
+            "quotazione": quotazione,
+        },
+    )
 
 
 @login_required
@@ -586,3 +608,88 @@ def allegato(request, percorso):
     from django.views.static import serve
 
     return serve(request, percorso, document_root=settings.MEDIA_ROOT)
+
+
+# --------------------------------------------------------------------------
+# Quotazioni, listino, riordini, promemoria, ricerca
+# --------------------------------------------------------------------------
+@login_required
+def quotazione_stampa(request, pk):
+    q = get_object_or_404(Quotazione.objects.select_related("progetto__cliente", "progetto__produttore", "versione_formula__formula"), pk=pk)
+    return render(request, "ws/quotazione_stampa.html", {"q": q, "righe": q.righe.all(), "azienda": Azienda.corrente()})
+
+
+@richiede("add", Quotazione)
+@require_POST
+def quotazione_duplica(request, pk):
+    q = get_object_or_404(Quotazione, pk=pk)
+    nuova = flusso.duplica_quotazione(q)
+    flusso.dopo_salvataggio(nuova, request.user, creato=True)
+    messages.success(request, f"Creata la versione {nuova.numero} in bozza: modifica le voci e indica il motivo della revisione.")
+    return redirect("modifica", "quotazione", nuova.pk)
+
+
+@richiede("add", VoceListino)
+@require_POST
+def listino_salva_riga(request, pk):
+    riga = get_object_or_404(RigaQuotazione.objects.select_related("quotazione__progetto"), pk=pk)
+    try:
+        flusso.riga_in_listino(riga)
+        messages.success(request, "Voce salvata nel listino.")
+    except flusso.FlussoError as e:
+        messages.error(request, str(e))
+    return redirect(_next(request, reverse("listino")))
+
+
+@richiede("add", RigaQuotazione)
+@require_POST
+def listino_usa(request, pk, quotazione):
+    voce = get_object_or_404(VoceListino, pk=pk)
+    q = get_object_or_404(Quotazione, pk=quotazione)
+    flusso.voce_in_quotazione(voce, q)
+    messages.success(request, f"Voce aggiunta alla quotazione n. {q.numero}: controlla la quantità.")
+    return redirect(q.progetto)
+
+
+@richiede("add", OrdineCliente)
+@require_POST
+def prodotto_riordino(request, pk):
+    p = get_object_or_404(Prodotto, pk=pk)
+    try:
+        ordine = flusso.crea_riordino(p)
+    except flusso.FlussoError as e:
+        messages.error(request, str(e))
+        return redirect(p)
+    messages.success(request, "Riordino creato in bozza con quantità e prezzo dell'ultimo ordine: controllali.")
+    return redirect(ordine)
+
+
+@richiede("change", Promemoria)
+@require_POST
+def promemoria_fatto(request, pk):
+    p = get_object_or_404(Promemoria, pk=pk)
+    p.fatto = True
+    p.save(update_fields=["fatto"])
+    if p.progetto_id:
+        Evento.objects.create(progetto=p.progetto, utente=request.user, testo=f"Fatto: {p.testo}", automatico=True)
+    return redirect(_next(request, request.META.get("HTTP_REFERER") or "/"))
+
+
+@login_required
+def cerca(request):
+    q = request.GET.get("q", "").strip()
+    gruppi = []
+    if len(q) >= 2:
+        ricerche = [
+            ("Clienti", Cliente.objects.filter(Q(ragione_sociale__icontains=q) | Q(partita_iva__icontains=q))),
+            ("Progetti", Progetto.objects.filter(Q(nome__icontains=q) | Q(codice__icontains=q) | Q(tipo_prodotto__icontains=q))),
+            ("Prodotti", Prodotto.objects.filter(Q(nome__icontains=q) | Q(codice__icontains=q))),
+            ("Formule", Formula.objects.filter(Q(nome__icontains=q) | Q(codice__icontains=q))),
+            ("Packaging", Packaging.objects.filter(Q(descrizione__icontains=q) | Q(codice__icontains=q) | Q(colore__icontains=q))),
+            ("Ordini clienti", OrdineCliente.objects.filter(Q(numero__icontains=q) | Q(riferimento_cliente__icontains=q))),
+            ("Ordini ai produttori", OrdineAcquisto.objects.filter(Q(numero__icontains=q) | Q(fattura_fornitore__icontains=q))),
+            ("Pre-fatture", PreFattura.objects.filter(Q(numero__icontains=q) | Q(numero_fattura__icontains=q))),
+        ]
+        gruppi = [(nome, list(qs[:15])) for nome, qs in ricerche]
+        gruppi = [g for g in gruppi if g[1]]
+    return render(request, "ws/cerca.html", {"q": q, "gruppi": gruppi})

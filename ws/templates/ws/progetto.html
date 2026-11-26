@@ -20,14 +20,15 @@
       <span class="badge {% if q.stato == 'accettata' %}ok{% elif q.stato == 'inviata' %}info{% elif q.stato == 'rifiutata' %}bad{% endif %}">{{ q.get_stato_display }}</span>
       {% if q.versione_formula %}<span class="badge">{{ q.versione_formula }}</span>{% endif %}
       {% if q.margine_pct != None %}<span class="muted small">margine {{ q.margine_pct|floatformat:1 }}%</span>{% endif %}
-      <span style="float:right"><a href="{% url 'modifica' 'quotazione' q.pk %}?next={{ request.path }}">modifica</a></span>
+      <span style="float:right"><a href="{% url 'quotazione_stampa' q.pk %}">offerta</a> · <a href="{% url 'modifica' 'quotazione' q.pk %}?next={{ request.path }}">modifica</a> ·
+        <form class="inline" method="post" action="{% url 'quotazione_duplica' q.pk %}">{% csrf_token %}<button class="link">nuova versione</button></form></span>
       {% if q.motivo %}<div class="small muted">Motivo revisione: {{ q.motivo }}</div>{% endif %}
     </div>
     <div class="tw"><table class="fitta"><tr><th style="min-width:210px">Voce</th><th class="n">Q.tà</th><th class="n">Costo</th><th class="n">Prezzo</th><th class="n">Marg.</th><th class="n">Totale</th><th></th></tr>
-    {% for r in q.righe.all %}<tr><td>{{ r.descrizione }}<div class="small muted">{{ r.get_tipo_display }}</div></td><td class="n">{{ r.quantita|intcomma }}</td><td class="n">{{ r.costo_unitario|floatformat:3 }} €</td><td class="n">{{ r.prezzo_unitario|floatformat:3 }} €</td>
+    {% for r in q.righe.all %}<tr><td>{{ r.descrizione }}<div class="small muted">{{ r.get_tipo_display }}</div></td><td class="n">{{ r.quantita|intcomma }}</td><td class="n">{{ r.costo_unitario|prezzo }} €</td><td class="n">{{ r.prezzo_unitario|prezzo }} €</td>
       <td class="n">{% if r.margine_pct != None %}{{ r.margine_pct|floatformat:1 }}%{% endif %}</td><td class="n">{{ r.totale_prezzo|floatformat:"2g" }} €</td>
       <td class="act"><a href="{% url 'modifica' 'rigaquotazione' r.pk %}?next={{ request.path }}">modifica</a></td></tr>{% endfor %}
-    <tr class="tot"><td colspan="5"><a class="small" style="font-weight:400" href="{% url 'nuovo' 'rigaquotazione' %}?quotazione={{ q.pk }}&next={{ request.path }}">+ aggiungi voce</a></td><td class="n">{{ q.totale_prezzo|floatformat:"2g" }} €</td><td></td></tr>
+    <tr class="tot"><td colspan="5"><a class="small" style="font-weight:400" href="{% url 'nuovo' 'rigaquotazione' %}?quotazione={{ q.pk }}&next={{ request.path }}">+ aggiungi voce</a> <span class="small muted" style="font-weight:400">·</span> <a class="small" style="font-weight:400" href="{% url 'listino' %}?quotazione={{ q.pk }}">+ dal listino</a></td><td class="n">{{ q.totale_prezzo|floatformat:"2g" }} €</td><td></td></tr>
     </table></div>
   {% empty %}<div class="empty">Nessuna quotazione. Inserisci il costo ricevuto dal produttore e il prezzo per il cliente.</div>{% endfor %}
   </div>
@@ -98,6 +99,9 @@
         <input name="motivo" placeholder="Motivo" required><button class="btn sec sm">Riporta</button></form></details>
     {% endif %}
   </div></div>
+
+  {% url 'nuovo' 'promemoria' as base_promemoria %}
+  {% include "ws/_promemoria.html" with nuovo_url=base_promemoria|add:"?progetto="|add:pk_testo|add:"&next="|add:request.path %}
 
   <div class="card"><div class="ch"><h2>Piano a ritroso</h2></div><div class="cb">
     {% if planner %}<ul class="checks">{% for t in planner %}<li class="{% if t.fatto %}si{% elif t.in_ritardo %}ritardo{% else %}attesa{% endif %}"><span class="d">{{ t.data|date:"d/m/Y" }}</span>{{ t.nome }}</li>{% endfor %}</ul>

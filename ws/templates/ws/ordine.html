@@ -9,7 +9,7 @@
 
 <div class="card"><div class="ch"><h2>Righe</h2><a class="btn sm" href="{% url 'nuovo' 'rigaordine' %}?ordine={{ o.pk }}">+ Riga</a></div>
 {% if righe %}<div class="tw"><table><tr><th>Prodotto</th><th>Formula</th><th class="n">Quantità</th><th class="n">Prezzo</th><th class="n">Totale</th><th></th></tr>
-{% for r in righe %}<tr><td><a href="{{ r.prodotto.get_absolute_url }}">{{ r.prodotto.codice }}</a> · {{ r.prodotto.nome }}</td><td>{{ r.prodotto.versione_formula|default:"—" }}</td><td class="n">{{ r.quantita|intcomma }}</td><td class="n">{{ r.prezzo_unitario|floatformat:3 }} €</td><td class="n">{{ r.totale|floatformat:"2g" }} €</td><td class="act"><a href="{% url 'modifica' 'rigaordine' r.pk %}">modifica</a></td></tr>{% endfor %}
+{% for r in righe %}<tr><td><a href="{{ r.prodotto.get_absolute_url }}">{{ r.prodotto.codice }}</a> · {{ r.prodotto.nome }}</td><td>{{ r.prodotto.versione_formula|default:"—" }}</td><td class="n">{{ r.quantita|intcomma }}</td><td class="n">{{ r.prezzo_unitario|prezzo }} €</td><td class="n">{{ r.totale|floatformat:"2g" }} €</td><td class="act"><a href="{% url 'modifica' 'rigaordine' r.pk %}">modifica</a></td></tr>{% endfor %}
 <tr class="tot"><td colspan="4">Totale imponibile</td><td class="n">{{ o.totale|floatformat:"2g" }} €</td><td></td></tr></table></div>
 {% else %}<div class="empty">Aggiungi i prodotti ordinati.</div>{% endif %}</div>
 

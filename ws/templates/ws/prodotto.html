@@ -3,7 +3,8 @@
 {% block title %}{{ p.codice }}{% endblock %}
 {% block content %}
 <div class="head"><div><h1>{{ p.nome }}</h1><div class="sub">{{ p.codice }} · <a href="{{ p.cliente.get_absolute_url }}">{{ p.cliente }}</a>{% if p.formato %} · {{ p.formato }}{% endif %}{% if p.progetto %} · progetto <a href="{{ p.progetto.get_absolute_url }}">{{ p.progetto.codice }}</a>{% endif %}</div></div>
-  <div class="actions"><a class="btn sec" href="{% url 'modifica' 'prodotto' p.pk %}">Modifica / cambia formula</a></div></div>
+  <div class="actions"><a class="btn sec" href="{% url 'modifica' 'prodotto' p.pk %}">Modifica / cambia formula</a>
+    <form class="inline" method="post" action="{% url 'prodotto_riordino' p.pk %}">{% csrf_token %}<button class="btn">+ Riordino</button></form></div></div>
 
 {% for a in avvisi %}
   {% if a.tipo == 'mancante' %}<div class="alert"><strong>{{ a.packaging.descrizione }}</strong> riporta l'INCI ma non ha un artwork con la versione della formula indicata: non è possibile verificare la coerenza.</div>

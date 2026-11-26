@@ -28,6 +28,8 @@
   {% else %}<div class="empty">Tutti i progetti sono in linea con la data di consegna.</div>{% endif %}</div>
 </div>
 <div>
+  {% url 'nuovo' 'promemoria' as nuovo_promemoria %}
+  {% include "ws/_promemoria.html" with mostra_contesto=True nuovo_url=nuovo_promemoria %}
   <div class="card"><div class="ch"><h2>In attesa del cliente</h2></div>
   {% if quotazioni or campionature %}<div class="tw"><table><tr><th>Cosa</th><th>Progetto</th><th>Dal</th></tr>
   {% for q in quotazioni %}<tr><td>Quotazione n. {{ q.numero }}</td><td><a href="{{ q.progetto.get_absolute_url }}">{{ q.progetto.nome }}</a><div class="small muted">{{ q.progetto.cliente }}</div></td><td>{{ q.data|date:"d/m/Y" }}</td></tr>{% endfor %}

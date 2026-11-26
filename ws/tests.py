@@ -221,7 +221,10 @@ class PagineTest(TestCase):
         self.assertRedirects(r, "/accedi/?next=/")
 
     def test_tutte_le_pagine_si_aprono(self):
-        urls = [reverse(n) for n in ("dashboard", "progetti", "clienti", "produttori", "formule", "prodotti", "catalogo", "magazzino", "listino", "ordini", "acquisti", "ddt_elenco", "prefatture")]
+        urls = [reverse(n) for n in ("dashboard", "progetti", "clienti", "produttori", "formule", "prodotti", "catalogo", "magazzino", "listino", "ordini", "acquisti", "ddt_elenco", "prefatture", "cerca")]
+        urls += [reverse("cerca") + "?q=mousse", reverse("listino") + "?scadute=1"]
+        urls += [reverse("quotazione_stampa", args=[q.pk]) for q in Quotazione.objects.all()]
+        urls.append(reverse("listino") + f"?quotazione={Quotazione.objects.first().pk}")
         urls.append(reverse("listino") + "?q=mousse")
         urls.append(reverse("progetti") + "?stato=tutti")
         urls += [p.get_absolute_url() for p in Progetto.objects.all()]
@@ -413,3 +416,86 @@ class RuoliTest(TestCase):
         self.assertEqual([(x.tipo, x.quantita) for x in oa.righe.all()], [("prodotto", 8000), ("packaging", 7000)])
         self.client.post(reverse("ordine_genera_ddt", args=[bozza.pk]))
         self.assertEqual(DDT.objects.filter(ordine=bozza).count(), 1)
+
+
+class ListinoRiordiniPromemoriaTest(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        call_command("dati_demo", verbosity=0)
+
+    def setUp(self):
+        self.client.force_login(get_user_model().objects.get(username="commerciale"))
+
+    def test_nuova_versione_della_quotazione(self):
+        p = Progetto.objects.get(nome__startswith="Shampoo")
+        accettata = flusso.quotazione_accettata(p)
+        r = self.client.post(reverse("quotazione_duplica", args=[accettata.pk]))
+        nuova = p.quotazioni.order_by("-numero").first()
+        self.assertRedirects(r, reverse("modifica", args=["quotazione", nuova.pk]))
+        self.assertEqual((nuova.numero, nuova.stato), (accettata.numero + 1, "bozza"))
+        self.assertEqual(
+            [(x.descrizione, x.quantita, x.prezzo_unitario) for x in nuova.righe.all()],
+            [(x.descrizione, x.quantita, x.prezzo_unitario) for x in accettata.righe.all()],
+        )
+        accettata.refresh_from_db()
+        self.assertEqual(accettata.stato, "accettata")  # resta valida finché la nuova non è accettata
+
+    def test_offerta_non_mostra_i_costi(self):
+        q = Quotazione.objects.get(progetto__nome__startswith="Deodorante")
+        r = self.client.get(reverse("quotazione_stampa", args=[q.pk]))
+        self.assertContains(r, "1,050")
+        self.assertNotContains(r, "0,740")
+
+    def test_listino_dallo_storico_e_verso_una_quotazione(self):
+        from .models import RigaQuotazione, VoceListino
+
+        riga = RigaQuotazione.objects.filter(voci_listino__isnull=True, quotazione__progetto__produttore__isnull=False).first()
+        prima = VoceListino.objects.count()
+        self.client.post(reverse("listino_salva_riga", args=[riga.pk]))
+        voce = VoceListino.objects.get(origine=riga)
+        self.assertEqual(VoceListino.objects.count(), prima + 1)
+        self.assertEqual((voce.quantita_minima, voce.costo_unitario, voce.produttore), (riga.quantita, riga.costo_unitario, riga.quotazione.progetto.produttore))
+
+        p = Progetto.objects.get(nome__startswith="Lacca")
+        q = Quotazione.objects.create(progetto=p)
+        r = self.client.post(reverse("listino_usa", args=[voce.pk, q.pk]))
+        self.assertRedirects(r, p.get_absolute_url())
+        self.assertEqual([(x.descrizione, x.prezzo_unitario) for x in q.righe.all()], [(voce.descrizione, voce.prezzo_unitario)])
+
+    def test_voci_scadute_nascoste(self):
+        from .models import VoceListino
+
+        v = VoceListino.objects.first()
+        v.valido_fino = oggi() - timedelta(days=1)
+        v.save()
+        self.assertNotIn(v, flusso.voci_listino())
+        self.assertIn(v, flusso.voci_listino(scadute=True))
+
+    def test_riordino_rapido(self):
+        prodotto = Prodotto.objects.get(codice="LUM-MOU-200")
+        r = self.client.post(reverse("prodotto_riordino", args=[prodotto.pk]))
+        ordine = OrdineCliente.objects.order_by("-pk").first()
+        self.assertRedirects(r, ordine.get_absolute_url())
+        riga = ordine.righe.get()
+        self.assertEqual((ordine.stato, ordine.produttore.nome, riga.quantita, str(riga.prezzo_unitario)), ("bozza", "Biopharma", 8000, "2.6500"))
+
+    def test_promemoria(self):
+        from .models import Promemoria
+
+        p = Progetto.objects.get(nome__startswith="Deodorante")
+        m = p.promemoria.get()
+        self.assertTrue(m.scaduto)
+        self.assertEqual(m.cliente, p.cliente)  # ricavato dal progetto
+        self.assertContains(self.client.get(reverse("dashboard")), m.testo)
+        self.client.post(reverse("promemoria_fatto", args=[m.pk]))
+        m.refresh_from_db()
+        self.assertTrue(m.fatto)
+        self.assertTrue(p.eventi.filter(testo__startswith="Fatto:").exists())
+        self.assertNotIn(m, self.client.get(reverse("dashboard")).context["promemoria"])
+        self.assertEqual(Promemoria.objects.filter(fatto=False).count(), 3)
+
+    def test_ricerca(self):
+        r = self.client.get(reverse("cerca") + "?q=lumi")
+        self.assertContains(r, "Lumière Beauty Srl")
+        r = self.client.get(reverse("cerca") + "?q=LUM-MOU")
+        self.assertContains(r, "Mousse volumizzante Lumière")

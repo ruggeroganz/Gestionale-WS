@@ -150,3 +150,8 @@ table.fitta th:first-child, table.fitta td:first-child { padding-left: 14px; }
   .doc { padding: 18px; }
   .doc .parti, .doc .firma { grid-template-columns: 1fr; }
 }
+
+.side .cerca { padding: 0 4px 10px; }
+.side .cerca input { width: 100%; padding: 6px 9px; border-radius: 6px; border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.1); color: #fff; font: inherit; }
+.side .cerca input::placeholder { color: rgba(255,255,255,.6); }
+@media (max-width: 800px) { .side .cerca { width: 100%; padding-bottom: 4px; } }

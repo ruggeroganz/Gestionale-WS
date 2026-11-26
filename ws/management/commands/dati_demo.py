@@ -22,12 +22,14 @@ from ws.models import (
     Prodotto,
     Produttore,
     Progetto,
+    Promemoria,
     Quotazione,
     RigaDistinta,
     RigaOrdine,
     RigaQuotazione,
     TestStabilita,
     VersioneFormula,
+    VoceListino,
     oggi,
 )
 
@@ -144,5 +146,15 @@ class Command(BaseCommand):
 
         # --- Progetto 5: lead con data di consegna troppo vicina
         Progetto.objects.create(nome="Lacca forte 300 ml", cliente=aur, tipo_prodotto="Lacca capelli", fase="lead", responsabile=utenti["commerciale"], quantita_prevista=10000, data_consegna_richiesta=giorni(170), brief="Richiesta ricevuta in fiera, da assegnare a un produttore.")
+
+        # --- Listino e promemoria
+        for riga in list(q1.righe.filter(tipo="prodotto")) + list(q3.righe.all()) + list(q4.righe.all()):
+            flusso.riga_in_listino(riga)
+        VoceListino.objects.create(produttore=bio, formula=f1, descrizione="Mousse 200 ml, bombola litografata, full service", quantita_minima=10000, costo_unitario=D("1.720"), prezzo_unitario=D("2.550"), note="Scaglione indicato da Biopharma a voce.")
+        VoceListino.objects.create(produttore=bio, tipo="una_tantum", descrizione="Impianti litografia bombola (per artwork)", costo_unitario=D("650"), prezzo_unitario=D("800"), valido_dal=giorni(-340))
+        Promemoria.objects.create(testo="Sollecitare risposta sulla quotazione", scadenza=giorni(-1), progetto=p3, assegnato_a=utenti["commerciale"])
+        Promemoria.objects.create(testo="Chiedere a Biopharma i risultati intermedi di stabilità", scadenza=giorni(5), progetto=p2, assegnato_a=utenti["customer"])
+        Promemoria.objects.create(testo="Decidere con il cliente come gestire le bombole con il vecchio INCI", scadenza=giorni(2), progetto=p1, assegnato_a=utenti["customer"])
+        Promemoria.objects.create(testo="Proporre la linea solari per la prossima stagione", scadenza=giorni(20), cliente=aur, assegnato_a=utenti["commerciale"])
 
         self.stdout.write(self.style.SUCCESS(f"Dati demo caricati. Utenti: commerciale, customer, amministrazione, admin (password: {PASSWORD})."))

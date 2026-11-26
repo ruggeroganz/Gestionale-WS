@@ -17,6 +17,8 @@
   <div class="card"><div class="ch"><h2>Ordini</h2></div>{% if ordini %}<div class="tw"><table><tr><th>Ordine</th><th>Data</th><th>Stato</th><th class="n">Totale</th></tr>
   {% for o in ordini %}<tr><td><a href="{{ o.get_absolute_url }}">{{ o.numero }}</a></td><td>{{ o.data|date:"d/m/Y" }}</td><td>{{ o.get_stato_display }}</td><td class="n">{{ o.totale|floatformat:"2g" }} €</td></tr>{% endfor %}</table></div>{% else %}<div class="empty">Nessun ordine.</div>{% endif %}</div>
 </div><div>
+  {% url 'nuovo' 'promemoria' as base_promemoria %}
+  {% include "ws/_promemoria.html" with mostra_contesto=True nuovo_url=base_promemoria|add:"?cliente="|add:pk_testo|add:"&next="|add:request.path %}
   <div class="card"><div class="ch"><h2>Anagrafica</h2></div><div class="cb"><dl class="dl">
     <dt>Partita IVA</dt><dd>{{ c.partita_iva|default:"—" }}</dd><dt>Indirizzo</dt><dd>{{ c.indirizzo|default:"—" }}</dd>
     <dt>Email</dt><dd>{{ c.email|default:"—" }}</dd><dt>Telefono</dt><dd>{{ c.telefono|default:"—" }}</dd>

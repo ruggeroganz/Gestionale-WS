@@ -8,7 +8,7 @@
   <div class="parti"><div><h3>Fornitore</h3><strong>{{ NOME_AZIENDA }}</strong></div>
     <div><h3>Cliente</h3><strong>{{ o.cliente.ragione_sociale }}</strong><br>{{ o.cliente.indirizzo }}<br>{% if o.cliente.partita_iva %}P. IVA {{ o.cliente.partita_iva }}{% endif %}</div></div>
   <table><tr><th>Codice</th><th>Descrizione</th><th class="n">Quantità</th><th class="n">Prezzo unitario</th><th class="n">Importo</th></tr>
-  {% for r in righe %}<tr><td>{{ r.prodotto.codice }}</td><td>{{ r.prodotto.nome }}{% if r.prodotto.formato %} · {{ r.prodotto.formato }}{% endif %}</td><td class="n">{{ r.quantita|intcomma }}</td><td class="n">{{ r.prezzo_unitario|floatformat:3 }} €</td><td class="n">{{ r.totale|floatformat:"2g" }} €</td></tr>{% endfor %}
+  {% for r in righe %}<tr><td>{{ r.prodotto.codice }}</td><td>{{ r.prodotto.nome }}{% if r.prodotto.formato %} · {{ r.prodotto.formato }}{% endif %}</td><td class="n">{{ r.quantita|intcomma }}</td><td class="n">{{ r.prezzo_unitario|prezzo }} €</td><td class="n">{{ r.totale|floatformat:"2g" }} €</td></tr>{% endfor %}
   <tr class="tot"><td colspan="4">Totale imponibile (IVA esclusa)</td><td class="n">{{ o.totale|floatformat:"2g" }} €</td></tr></table>
   <p style="margin-top:18px">Consegna prevista: <strong>{{ o.data_consegna_prevista|date:"d/m/Y"|default:"da definire" }}</strong></p>
   {% if o.note %}<p>{{ o.note|linebreaksbr }}</p>{% endif %}

@@ -1,0 +1,9 @@
+{% extends "ws/base.html" %}
+{% block title %}Cerca{% endblock %}
+{% block content %}
+<div class="head"><h1>Cerca</h1></div>
+<form class="search"><input class="q" name="q" value="{{ q }}" placeholder="Cliente, progetto, SKU, formula, numero d'ordine…" autofocus><button class="btn sec">Cerca</button></form>
+{% for nome, risultati in gruppi %}<div class="card"><div class="ch"><h2>{{ nome }}</h2><span class="badge">{{ risultati|length }}</span></div><div class="tw"><table>
+  {% for r in risultati %}<tr><td><a href="{{ r.get_absolute_url }}">{{ r }}</a></td></tr>{% endfor %}</table></div></div>
+{% empty %}{% if q %}<p class="muted">Nessun risultato per «{{ q }}».</p>{% endif %}{% endfor %}
+{% endblock %}

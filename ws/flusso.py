@@ -459,3 +459,104 @@ def listino(testo=""):
             | Q(quotazione__versione_formula__formula__codice__icontains=testo)
         )
     return qs
+
+
+# --------------------------------------------------------------------------
+# Quotazioni: nuova versione, listino; riordini
+# --------------------------------------------------------------------------
+@transaction.atomic
+def duplica_quotazione(quotazione):
+    """Nuova versione in bozza con le stesse voci, da modificare."""
+    nuova = Quotazione.objects.create(
+        progetto=quotazione.progetto,
+        versione_formula=formula_approvata(quotazione.progetto) or quotazione.versione_formula,
+        valida_fino=None,
+        note=quotazione.note,
+    )
+    for r in quotazione.righe.all():
+        RigaQuotazione.objects.create(
+            quotazione=nuova,
+            tipo=r.tipo,
+            descrizione=r.descrizione,
+            quantita=r.quantita,
+            costo_unitario=r.costo_unitario,
+            prezzo_unitario=r.prezzo_unitario,
+        )
+    return nuova
+
+
+def riga_in_listino(riga):
+    from .models import VoceListino
+
+    q = riga.quotazione
+    if not q.progetto.produttore_id:
+        raise FlussoError("Il progetto non ha un produttore: assegnalo prima di salvare la voce nel listino.")
+    return VoceListino.objects.create(
+        produttore=q.progetto.produttore,
+        formula=q.versione_formula.formula if q.versione_formula_id else None,
+        tipo=riga.tipo,
+        descrizione=riga.descrizione,
+        quantita_minima=riga.quantita,
+        costo_unitario=riga.costo_unitario,
+        prezzo_unitario=riga.prezzo_unitario,
+        valido_dal=q.data,
+        valido_fino=q.valida_fino,
+        origine=riga,
+    )
+
+
+def voce_in_quotazione(voce, quotazione):
+    return RigaQuotazione.objects.create(
+        quotazione=quotazione,
+        tipo=voce.tipo,
+        descrizione=voce.descrizione,
+        quantita=voce.quantita_minima,
+        costo_unitario=voce.costo_unitario,
+        prezzo_unitario=voce.prezzo_unitario,
+    )
+
+
+def voci_listino(testo="", scadute=False):
+    from django.db.models import Q
+
+    from .models import VoceListino
+
+    qs = VoceListino.objects.select_related("produttore", "formula")
+    if not scadute:
+        qs = qs.filter(Q(valido_fino__isnull=True) | Q(valido_fino__gte=oggi()))
+    if testo:
+        qs = qs.filter(
+            Q(descrizione__icontains=testo)
+            | Q(produttore__nome__icontains=testo)
+            | Q(formula__nome__icontains=testo)
+            | Q(formula__codice__icontains=testo)
+            | Q(note__icontains=testo)
+        )
+    return qs
+
+
+@transaction.atomic
+def crea_riordino(prodotto):
+    """Ordine in bozza con quantità, prezzo e produttore dell'ultimo ordine del prodotto."""
+    from .models import RigaOrdine
+
+    ultima = (
+        RigaOrdine.objects.filter(prodotto=prodotto)
+        .exclude(ordine__stato=OrdineCliente.Stato.ANNULLATO)
+        .select_related("ordine__produttore")
+        .order_by("-ordine__data", "-pk")
+        .first()
+    )
+    produttore = ultima.ordine.produttore if ultima else (prodotto.progetto.produttore if prodotto.progetto_id else None)
+    if produttore is None:
+        raise FlussoError("Non so a quale produttore assegnare il riordino: crea l'ordine a mano.")
+    ordine = OrdineCliente.objects.create(
+        cliente=prodotto.cliente, progetto=prodotto.progetto, produttore=produttore, note="Riordino."
+    )
+    RigaOrdine.objects.create(
+        ordine=ordine,
+        prodotto=prodotto,
+        quantita=ultima.quantita if ultima else 1,
+        prezzo_unitario=ultima.prezzo_unitario if ultima else 0,
+    )
+    return ordine

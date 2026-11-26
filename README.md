@@ -121,6 +121,20 @@ L'XML segue il tracciato ufficiale ma non è stato ancora validato con lo schema
 XSD dell'Agenzia delle Entrate né provato con un'importazione reale: va fatto
 un test con il commercialista prima di usarlo.
 
+### Listino, offerte, riordini, promemoria
+
+- **Listino prezzi**: voci con produttore, formula, scaglione di quantità, costo,
+  prezzo consigliato e validità. Si compilano a mano o con «salva nel listino»
+  dallo storico delle quotazioni; con «+ dal listino» una voce entra in una
+  nuova quotazione senza richiedere un brief al produttore.
+- **Quotazioni**: «nuova versione» copia le voci in una bozza da modificare;
+  «offerta» è il documento per il cliente, con i soli prezzi di vendita.
+- **Riordino**: dal prodotto, crea un ordine in bozza con quantità, prezzo e
+  produttore dell'ultimo ordine; il fabbisogno tiene conto del packaging residuo.
+- **Promemoria**: cose da fare con scadenza e assegnatario, su cliente o
+  progetto, raccolte nel cruscotto.
+- **Ricerca** su clienti, progetti, prodotti, formule, packaging e documenti.
+
 ### Ruoli
 
 Tutti gli utenti consultano tutto; inserire e modificare dipende dal gruppo
@@ -135,7 +149,6 @@ amministrazione; `python manage.py imposta_ruoli` li ripristina).
 
 ## Non ancora incluso
 
-Listino con scaglioni gestiti a parte (oggi è lo storico delle quotazioni);
-note di credito; pulsanti nascosti in base al ruolo (oggi l'operazione non
+Note di credito; pulsanti nascosti in base al ruolo (oggi l'operazione non
 permessa viene rifiutata con un messaggio); configurazione per la messa in
 produzione (database PostgreSQL, HTTPS, backup).

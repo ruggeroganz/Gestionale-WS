@@ -11,6 +11,7 @@
   {% if user.is_authenticated %}
   <nav class="side">
     <div class="logo">{{ NOME_AZIENDA }}<small>Gestionale private label</small></div>
+    <form action="{% url 'cerca' %}" class="cerca"><input name="q" placeholder="Cerca…" aria-label="Cerca"></form>
     {% with n=request.resolver_match.url_name %}
     <a href="{% url 'dashboard' %}" class="{% if n == 'dashboard' %}on{% endif %}">Cruscotto</a>
     <div class="sep">Sviluppo</div>
@@ -18,7 +19,7 @@
     <a href="{% url 'clienti' %}" class="{% if n == 'clienti' or n == 'cliente' %}on{% endif %}">Clienti</a>
     <a href="{% url 'produttori' %}" class="{% if n == 'produttori' %}on{% endif %}">Produttori</a>
     <a href="{% url 'formule' %}" class="{% if n == 'formule' %}on{% endif %}">Formule</a>
-    <a href="{% url 'listino' %}" class="{% if n == 'listino' %}on{% endif %}">Listino storico</a>
+    <a href="{% url 'listino' %}" class="{% if n == 'listino' %}on{% endif %}">Listino prezzi</a>
     <div class="sep">Prodotti e ordini</div>
     <a href="{% url 'prodotti' %}" class="{% if n == 'prodotti' or n == 'prodotto' %}on{% endif %}">Prodotti e distinte</a>
     <a href="{% url 'catalogo' %}" class="{% if n == 'catalogo' %}on{% endif %}">Packaging</a>
