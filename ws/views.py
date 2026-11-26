@@ -10,7 +10,8 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from . import documenti, flusso
-from .ruoli import puo
+from .accessi import SEZIONI, profilo_di, sezioni_nascoste
+from .ruoli import RUOLI, puo
 from .models import (
     DDT,
     Artwork,
@@ -28,6 +29,7 @@ from .models import (
     OrdineCliente,
     Packaging,
     PreFattura,
+    Profilo,
     Promemoria,
     Prodotto,
     Produttore,
@@ -703,7 +705,9 @@ def cerca(request):
             ("Ordini ai produttori", OrdineAcquisto.objects.filter(Q(numero__icontains=q) | Q(fattura_fornitore__icontains=q))),
             ("Pre-fatture", PreFattura.objects.filter(Q(numero__icontains=q) | Q(numero_fattura__icontains=q))),
         ]
-        gruppi = [(nome, list(qs[:15])) for nome, qs in ricerche]
+        sezione = {"Clienti": "clienti", "Progetti": "progetti", "Prodotti": "prodotti", "Formule": "formule", "Packaging": "prodotti", "Ordini clienti": "ordini", "Ordini ai produttori": "acquisti", "Pre-fatture": "fatture"}
+        nascoste = sezioni_nascoste(request.user)
+        gruppi = [(nome, list(qs[:15])) for nome, qs in ricerche if sezione[nome] not in nascoste]
         gruppi = [g for g in gruppi if g[1]]
     return render(request, "ws/cerca.html", {"q": q, "gruppi": gruppi})
 
@@ -926,3 +930,173 @@ def spedizione(request, pk):
         "ws/spedizione.html",
         {"sp": sp, "colli": sp.colli.select_related("prodotto"), "pericolose": pericolose, "mancanti": mancanti},
     )
+
+
+# --------------------------------------------------------------------------
+# Utenti e accessi (solo il gestore)
+# --------------------------------------------------------------------------
+def _solo_gestore(vista):
+    from functools import wraps
+
+    @wraps(vista)
+    @login_required
+    def interna(request, *args, **kwargs):
+        if not request.user.is_superuser:
+            return _negato(request)
+        return vista(request, *args, **kwargs)
+
+    return interna
+
+
+@_solo_gestore
+def utenti(request):
+    from django.contrib.auth import get_user_model
+
+    lista = list(get_user_model().objects.order_by("username").prefetch_related("groups"))
+    for u in lista:
+        u.prof = profilo_di(u)
+        u.nascoste = [SEZIONI[s][0] for s in (u.prof.sezioni_nascoste if u.prof else []) if s in SEZIONI]
+    return render(request, "ws/utenti.html", {"utenti": lista})
+
+
+@_solo_gestore
+def utente(request, pk=None):
+    from django.contrib.auth import get_user_model
+    from django.contrib.auth.models import Group
+    from django.contrib.auth.password_validation import validate_password
+    from django.core.exceptions import ValidationError
+
+    User = get_user_model()
+    u = get_object_or_404(User, pk=pk) if pk else None
+    prof = profilo_di(u) if u else None
+    errori = []
+    dati = request.POST if request.method == "POST" else None
+    if dati is not None:
+        username = dati.get("username", "").strip()
+        password = dati.get("password", "")
+        produttore = Produttore.objects.filter(pk=dati.get("produttore") or 0).first()
+        gestore = bool(dati.get("gestore")) and produttore is None
+        if not username:
+            errori.append("Indica il nome utente.")
+        elif User.objects.filter(username__iexact=username).exclude(pk=pk or 0).exists():
+            errori.append("Esiste già un utente con questo nome.")
+        if u is None and not password:
+            errori.append("Indica una password iniziale.")
+        if password:
+            try:
+                validate_password(password)
+            except ValidationError as e:
+                errori += list(e.messages)
+        if u is not None and u == request.user and (not gestore or not dati.get("attivo")):
+            errori.append("Non puoi togliere a te stesso il ruolo di gestore o disattivarti.")
+        if not errori:
+            u = u or User()
+            u.username, u.first_name, u.last_name, u.email = username, dati.get("nome", "").strip(), dati.get("cognome", "").strip(), dati.get("email", "").strip()
+            u.is_active, u.is_superuser, u.is_staff = bool(dati.get("attivo")), gestore, gestore
+            if password:
+                u.set_password(password)
+            u.save()
+            # un utente del produttore non ha ruoli interni
+            u.groups.set([] if produttore else Group.objects.filter(name__in=dati.getlist("ruoli")))
+            Profilo.objects.update_or_create(
+                user=u,
+                defaults={"produttore": produttore, "sezioni_nascoste": [] if produttore else [s for s in dati.getlist("nascoste") if s in SEZIONI]},
+            )
+            messages.success(request, f"Utente {u.username} salvato.")
+            return redirect("utenti")
+    return render(
+        request,
+        "ws/utente.html",
+        {
+            "u": u,
+            "prof": prof,
+            "errori": errori,
+            "dati": dati,
+            "ruoli": [(r, u is not None and u.groups.filter(name=r).exists()) for r in RUOLI],
+            "sezioni": [(k, nome, prof is not None and k in (prof.sezioni_nascoste or [])) for k, (nome, _) in SEZIONI.items()],
+            "produttori": Produttore.objects.all(),
+        },
+    )
+
+
+# --------------------------------------------------------------------------
+# Area riservata al produttore: solo i suoi progetti, senza prezzi né clienti
+# --------------------------------------------------------------------------
+def _produttore_di(request):
+    prof = profilo_di(request.user)
+    if prof is None or not prof.produttore_id:
+        raise Http404
+    return prof.produttore
+
+
+@login_required
+def portale(request):
+    prod = _produttore_di(request)
+    progetti = list(prod.progetti.filter(stato=Progetto.Stato.APERTO).order_by("-creato"))
+    for p in progetti:
+        p.formula = flusso.formula_approvata(p)
+        p.tds_attesi = p.artwork.filter(stato=Artwork.Stato.ATTESA_TDS).count()
+    ordini = prod.ordini_acquisto.exclude(stato__in=[OrdineAcquisto.Stato.BOZZA, OrdineAcquisto.Stato.ANNULLATO]).prefetch_related("righe")[:20]
+    return render(request, "ws/portale.html", {"prod": prod, "progetti": progetti, "ordini": ordini})
+
+
+@login_required
+def portale_progetto(request, pk):
+    prod = _produttore_di(request)
+    p = get_object_or_404(Progetto, pk=pk, produttore=prod)
+    return render(
+        request,
+        "ws/portale_progetto.html",
+        {
+            "prod": prod,
+            "p": p,
+            "formula_approvata": flusso.formula_approvata(p),
+            "formule": p.formule.prefetch_related("versioni"),
+            "campionature": p.campionature.select_related("versione_formula__formula"),
+            "stabilita": p.stabilita.select_related("versione_formula__formula"),
+            "artwork": p.artwork.select_related("versione_formula__formula"),
+            "brief": p.brief_produttore.exclude(stato=Brief.Stato.BOZZA),
+            "ordini": prod.ordini_acquisto.filter(ordine__progetto=p).exclude(stato=OrdineAcquisto.Stato.BOZZA).prefetch_related("righe"),
+        },
+    )
+
+
+@login_required
+def portale_file(request, tipo, pk):
+    """File di un progetto del produttore: artwork, TDS o brief compilato."""
+    from django.http import FileResponse, HttpResponse
+
+    prod = _produttore_di(request)
+    if tipo == "brief":
+        from . import brief as modulo
+
+        b = get_object_or_404(Brief.objects.exclude(stato=Brief.Stato.BOZZA), pk=pk, progetto__produttore=prod)
+        dati, _ = _campi_brief(b)
+        risposta = HttpResponse(modulo.compila(dati, b.valori), content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+        risposta["Content-Disposition"] = f'attachment; filename="Technical Brief {b.progetto.codice}-{b.numero}.docx"'
+        return risposta
+    a = get_object_or_404(Artwork, pk=pk, progetto__produttore=prod)
+    f = {"artwork": a.file, "tds": a.file_tds}.get(tipo)
+    if not f:
+        raise Http404
+    return FileResponse(f.open("rb"), as_attachment=True, filename=f.name.rsplit("/", 1)[-1])
+
+
+@login_required
+@require_POST
+def portale_tds(request, pk):
+    """Il produttore carica il TDS: l'artwork passa al cliente e il progetto lo registra nel diario."""
+    prod = _produttore_di(request)
+    a = get_object_or_404(Artwork, pk=pk, progetto__produttore=prod)
+    f = request.FILES.get("file")
+    if not f:
+        messages.error(request, "Scegli il file del TDS da caricare.")
+    else:
+        a.file_tds.save(f.name, f, save=False)
+        a.data_tds_ricevuto = flusso.oggi()
+        if a.stato == Artwork.Stato.ATTESA_TDS:
+            a.stato = Artwork.Stato.BOZZA
+        a.save()
+        Evento.objects.create(progetto=a.progetto, utente=request.user, testo=f"TDS per «{a.nome}» caricato dal produttore.", automatico=True)
+        messages.success(request, "TDS caricato.")
+    return redirect("portale_progetto", a.progetto_id)

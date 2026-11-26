@@ -1,0 +1,11 @@
+{% extends "ws/portale_base.html" %}
+{% load humanize %}
+{% block content %}
+<div class="head"><div><h1>Progetti in corso</h1><div class="sub">{{ progetti|length }} progetti affidati a {{ prod.nome }}</div></div></div>
+<div class="card"><div class="tw"><table><tr><th>Progetto</th><th>Tipo di prodotto</th><th>Fase</th><th>Formula</th><th>Consegna richiesta</th><th></th></tr>
+{% for p in progetti %}<tr><td><a href="{% url 'portale_progetto' p.pk %}">{{ p.codice }} · {{ p.nome }}</a></td><td>{{ p.tipo_prodotto|default:"—" }}</td><td><span class="badge info">{{ p.get_fase_display }}</span></td><td>{{ p.formula|default:"—" }}</td><td>{{ p.data_consegna_richiesta|date:"d/m/Y"|default:"—" }}</td>
+  <td>{% if p.tds_attesi %}<span class="badge warn">TDS da inviare</span>{% endif %}</td></tr>
+{% empty %}<tr><td colspan="6" class="muted">Nessun progetto in corso.</td></tr>{% endfor %}</table></div></div>
+<div class="card"><div class="ch"><h2>Ordini ricevuti</h2></div>{% if ordini %}<div class="tw"><table><tr><th>Ordine</th><th>Data</th><th>Stato</th><th>Contenuto</th><th>Consegna richiesta</th></tr>
+{% for o in ordini %}<tr><td><strong>{{ o.numero }}</strong></td><td>{{ o.data|date:"d/m/Y" }}</td><td>{{ o.get_stato_display }}</td><td class="small">{% for r in o.righe.all %}{{ r.quantita|intcomma }} × {{ r.descrizione }}<br>{% endfor %}</td><td>{{ o.data_consegna_richiesta|date:"d/m/Y"|default:"—" }}</td></tr>{% endfor %}</table></div>{% else %}<div class="empty">Nessun ordine.</div>{% endif %}</div>
+{% endblock %}

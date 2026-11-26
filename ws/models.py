@@ -1348,3 +1348,24 @@ class Collo(models.Model):
 
     def get_absolute_url(self):
         return self.spedizione.get_absolute_url()
+
+
+# --------------------------------------------------------------------------
+# Accessi
+# --------------------------------------------------------------------------
+class Profilo(models.Model):
+    """Limiti di accesso di un utente: utente del produttore, oppure sezioni nascoste a un utente interno."""
+
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="profilo")
+    produttore = models.ForeignKey(
+        Produttore, null=True, blank=True, on_delete=models.CASCADE, related_name="accessi",
+        help_text="Se indicato, l'utente vede solo l'area riservata di questo produttore.",
+    )
+    sezioni_nascoste = models.JSONField(default=list, blank=True)
+
+    class Meta:
+        verbose_name = "profilo di accesso"
+        verbose_name_plural = "profili di accesso"
+
+    def __str__(self):
+        return str(self.user)

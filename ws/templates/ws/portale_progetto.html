@@ -1,0 +1,25 @@
+{% extends "ws/portale_base.html" %}
+{% load humanize %}
+{% block title %}{{ p.nome }}{% endblock %}
+{% block content %}
+<div class="head"><div><h1>{{ p.nome }}</h1><div class="sub"><a href="{% url 'portale' %}">← Tutti i progetti</a> · {{ p.codice }} · {{ p.tipo_prodotto }} · <span class="badge info">{{ p.get_fase_display }}</span></div></div></div>
+<div class="grid g21"><div>
+  <div class="card"><div class="ch"><h2>Formule</h2></div>{% for f in formule %}<div class="cb" style="border-bottom:1px solid var(--line)"><strong>{{ f.codice }}</strong> · {{ f.nome }}</div>
+    <div class="tw"><table><tr><th>Vers.</th><th>Data</th><th>INCI</th><th>Modifiche</th></tr>{% for v in f.versioni.all %}<tr><td><strong>v{{ v.numero }}</strong>{% if v == formula_approvata %} <span class="badge ok">approvata</span>{% endif %}</td><td>{{ v.data|date:"d/m/Y" }}</td><td class="inci">{{ v.inci }}</td><td class="small">{{ v.modifiche }}</td></tr>{% endfor %}</table></div>
+  {% empty %}<div class="empty">Nessuna formula registrata.</div>{% endfor %}</div>
+  <div class="card"><div class="ch"><h2>Campionature</h2></div>{% if campionature %}<div class="tw"><table><tr><th>N.</th><th>Formula</th><th>Inviata</th><th>Esito</th><th>Richieste del cliente</th></tr>
+  {% for c in campionature %}<tr><td>{{ c.numero }}</td><td>{{ c.versione_formula }}</td><td>{{ c.data_invio|date:"d/m/Y" }}</td><td><span class="badge {% if c.esito == 'approvata' %}ok{% elif c.esito == 'modifiche' %}warn{% elif c.esito == 'rifiutata' %}bad{% else %}info{% endif %}">{{ c.get_esito_display }}</span></td><td class="small">{{ c.feedback }}</td></tr>{% endfor %}</table></div>{% else %}<div class="empty">Nessuna campionatura.</div>{% endif %}</div>
+  <div class="card"><div class="ch"><h2>Stabilità</h2></div>{% if stabilita %}<div class="tw"><table><tr><th>Formula</th><th>Inizio</th><th>Fine prevista</th><th>Esito</th></tr>
+  {% for t in stabilita %}<tr><td>{{ t.versione_formula }}</td><td>{{ t.data_inizio|date:"d/m/Y" }}</td><td>{{ t.data_fine_prevista|date:"d/m/Y" }}</td><td><span class="badge {% if t.esito == 'superata' %}ok{% elif t.esito == 'fallita' %}bad{% else %}info{% endif %}">{{ t.get_esito_display }}</span></td></tr>{% endfor %}</table></div>{% else %}<div class="empty">Nessun test registrato.</div>{% endif %}</div>
+  <div class="card"><div class="ch"><h2>TDS e artwork</h2></div>{% if artwork %}<div class="tw"><table><tr><th>Artwork</th><th>Stato</th><th>TDS</th><th>File</th><th>Carica il TDS</th></tr>
+  {% for a in artwork %}<tr><td>{{ a.nome }} <strong>v{{ a.versione }}</strong><div class="small muted">INCI: {{ a.versione_formula|default:"—" }}</div></td>
+    <td><span class="badge {% if a.stato == 'approvato' %}ok{% elif a.stato == 'attesa_tds' %}warn{% elif a.stato == 'da_rifare' or a.stato == 'modifiche' %}bad{% else %}info{% endif %}">{{ a.get_stato_display }}</span></td>
+    <td class="small">{% if a.data_tds_richiesto %}richiesto il {{ a.data_tds_richiesto|date:"d/m/Y" }}{% endif %}{% if a.data_tds_ricevuto %}<br>inviato il {{ a.data_tds_ricevuto|date:"d/m/Y" }}{% endif %}</td>
+    <td class="small">{% if a.file_tds %}<a href="{% url 'portale_file' 'tds' a.pk %}">TDS</a> {% endif %}{% if a.file %}<a href="{% url 'portale_file' 'artwork' a.pk %}">artwork</a>{% endif %}</td>
+    <td><form method="post" enctype="multipart/form-data" action="{% url 'portale_tds' a.pk %}" class="note" style="margin:0">{% csrf_token %}<input type="file" name="file" id="id_tds_{{ a.pk }}" required aria-label="File TDS"><button class="btn sec sm">Carica</button></form></td></tr>{% endfor %}</table></div>{% else %}<div class="empty">Nessun artwork registrato.</div>{% endif %}</div>
+</div><div>
+  <div class="card"><div class="ch"><h2>Dati</h2></div><div class="cb"><dl class="dl"><dt>Quantità prevista</dt><dd>{% if p.quantita_prevista %}{{ p.quantita_prevista|intcomma }} pz{% else %}—{% endif %}</dd><dt>Consegna richiesta</dt><dd>{{ p.data_consegna_richiesta|date:"d/m/Y"|default:"—" }}</dd><dt>Campione di stampa</dt><dd>{{ p.get_campione_packaging_display }}</dd></dl></div></div>
+  <div class="card"><div class="ch"><h2>Brief</h2></div>{% if brief %}<div class="tw"><table>{% for b in brief %}<tr><td>Brief n. {{ b.numero }}<div class="small muted">{{ b.data_invio|date:"d/m/Y" }}</div></td><td class="act"><a href="{% url 'portale_file' 'brief' b.pk %}">scarica</a></td></tr>{% endfor %}</table></div>{% else %}<div class="empty">Nessun brief inviato.</div>{% endif %}</div>
+  <div class="card"><div class="ch"><h2>Ordini</h2></div>{% if ordini %}<div class="tw"><table>{% for o in ordini %}<tr><td><strong>{{ o.numero }}</strong> · {{ o.data|date:"d/m/Y" }}<div class="small">{% for r in o.righe.all %}{{ r.quantita|intcomma }} × {{ r.descrizione }}<br>{% endfor %}</div></td></tr>{% endfor %}</table></div>{% else %}<div class="empty">Nessun ordine.</div>{% endif %}</div>
+</div></div>
+{% endblock %}

@@ -1,0 +1,12 @@
+{% extends "ws/base.html" %}
+{% block title %}Utenti e accessi{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Utenti e accessi</h1><div class="sub">Chi entra nel gestionale, con quale ruolo e cosa può vedere. Gli utenti di un produttore vedono solo la loro area riservata, senza prezzi né clienti.</div></div>
+  <div class="actions"><a class="btn" href="{% url 'utente_nuovo' %}">+ Nuovo utente</a></div></div>
+<div class="card"><div class="tw"><table><tr><th>Utente</th><th>Nome</th><th>Tipo</th><th>Ruoli</th><th>Sezioni nascoste</th><th>Stato</th></tr>
+{% for u in utenti %}<tr><td><a href="{% url 'utente' u.pk %}">{{ u.username }}</a></td><td>{{ u.get_full_name|default:"—" }}</td>
+  <td>{% if u.prof.produttore %}<span class="badge warn">Produttore · {{ u.prof.produttore }}</span>{% elif u.is_superuser %}<span class="badge info">Gestore</span>{% else %}Interno{% endif %}</td>
+  <td class="small">{% for g in u.groups.all %}{{ g.name }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="muted">—</span>{% endfor %}</td>
+  <td class="small">{{ u.nascoste|join:", "|default:"—" }}</td><td>{% if u.is_active %}<span class="badge ok">attivo</span>{% else %}<span class="badge">disattivato</span>{% endif %}</td></tr>{% endfor %}
+</table></div></div>
+{% endblock %}

@@ -5,6 +5,12 @@
 <div class="head"><div><h1>Cruscotto</h1><div class="sub">{{ n_aperti }} progetti aperti</div></div>
   <div class="actions"><a class="btn" href="{% url 'nuovo' 'progetto' %}">+ Nuovo progetto</a></div></div>
 
+{% if nascoste %}
+{# con sezioni nascoste il cruscotto mostra solo i promemoria, per non esporre dati di quelle sezioni #}
+{% url 'nuovo' 'promemoria' as nuovo_promemoria_ridotto %}
+<div class="form" style="max-width:720px">{% include "ws/_promemoria.html" with mostra_contesto=False nuovo_url=nuovo_promemoria_ridotto %}</div>
+<p class="muted">Il tuo accesso è limitato ad alcune sezioni: usa il menu a sinistra.</p>
+{% else %}
 <div class="stats">{% for f in fasi %}<a class="stat" href="{% url 'progetti' %}"><b>{{ f.n }}</b><span>{{ f.nome }}</span></a>{% endfor %}</div>
 
 <div class="grid g2">
@@ -47,4 +53,5 @@
   {% empty %}<li class="muted">Nessuna attività.</li>{% endfor %}</ul></div></div>
 </div>
 </div>
+{% endif %}
 {% endblock %}

@@ -278,3 +278,9 @@ form.inline { display: inline; }
 .caselle input { accent-color: var(--accent); width: 15px; height: 15px; }
 .barra-salva { position: sticky; bottom: 0; padding: 12px 0; background: linear-gradient(to top, var(--bg) 70%, transparent); }
 @media (max-width: 860px) { .griglia-brief { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- Area produttore ---------- */
+.logo-portale { display: flex; align-items: center; gap: 10px; font-weight: 650; color: var(--ink); }
+.logo-portale:hover { text-decoration: none; }
+.logo-portale .mark { width: 30px; height: 30px; border-radius: 9px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font-size: 12px; font-weight: 700; }
+.note input[type=file] { padding: 5px; font-size: 12.5px; }

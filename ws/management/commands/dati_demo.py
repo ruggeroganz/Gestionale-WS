@@ -25,6 +25,7 @@ from ws.models import (
     Packaging,
     Prodotto,
     Produttore,
+    Profilo,
     Progetto,
     Promemoria,
     Quotazione,
@@ -158,6 +159,10 @@ class Command(BaseCommand):
         # --- Progetto 5: lead con data di consegna troppo vicina
         Progetto.objects.create(nome="Lacca forte 300 ml", cliente=aur, tipo_prodotto="Lacca capelli", fase="lead", responsabile=utenti["commerciale"], quantita_prevista=10000, data_consegna_richiesta=giorni(170), brief="Richiesta ricevuta in fiera, da assegnare a un produttore.")
 
+        # --- Utente esterno del produttore: vede solo l'area riservata
+        esterno = User.objects.create_user("produttore", password=PASSWORD, first_name="Utente", last_name="Biopharma")
+        Profilo.objects.create(user=esterno, produttore=bio)
+
         # --- Brief al produttore, su un modulo dimostrativo
         modello = modulo_brief.modello_dimostrativo()
         bio.modello_brief.save("modulo-brief-demo.docx", ContentFile(modello))
@@ -175,4 +180,4 @@ class Command(BaseCommand):
         Promemoria.objects.create(testo="Decidere con il cliente come gestire le bombole con il vecchio INCI", scadenza=giorni(2), progetto=p1, assegnato_a=utenti["customer"])
         Promemoria.objects.create(testo="Proporre la linea solari per la prossima stagione", scadenza=giorni(20), cliente=aur, assegnato_a=utenti["commerciale"])
 
-        self.stdout.write(self.style.SUCCESS(f"Dati demo caricati. Utenti: commerciale, customer, amministrazione, admin (password: {PASSWORD})."))
+        self.stdout.write(self.style.SUCCESS(f"Dati demo caricati. Utenti: commerciale, customer, amministrazione, admin, produttore (password: {PASSWORD})."))

@@ -1,0 +1,23 @@
+{% load static %}<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Area produttore{% endblock %} · {{ NOME_AZIENDA }}</title>
+<link rel="stylesheet" href="{% static 'ws/app.css' %}">
+</head>
+<body>
+<div class="col">
+  <header class="top">
+    <a href="{% url 'portale' %}" class="logo-portale"><span class="mark">{{ NOME_AZIENDA|slice:":2"|upper }}</span><span>{{ NOME_AZIENDA }} · area riservata {{ prod.nome }}</span></a>
+    <span class="spazio"></span>
+    <details class="utente"><summary><span class="avatar">{{ user.get_full_name|default:user.username|slice:":1"|upper }}</span><span class="nome">{{ user.get_full_name|default:user.username }}</span></summary>
+      <div class="menu"><a href="{% url 'password' %}">Cambia password</a><hr><form method="post" action="{% url 'logout' %}">{% csrf_token %}<button>Esci</button></form></div></details>
+  </header>
+  <main style="margin:0 auto">
+    {% if messages %}<div class="msgs">{% for m in messages %}<div class="alert {% if m.tags == 'error' %}bad{% elif m.tags == 'success' %}ok{% endif %}">{{ m }}</div>{% endfor %}</div>{% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+</body>
+</html>

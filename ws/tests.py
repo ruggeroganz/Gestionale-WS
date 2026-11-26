@@ -439,7 +439,7 @@ class RuoliTest(TestCase):
     def test_gruppi_creati_con_i_permessi_iniziali(self):
         U = get_user_model()
         self.assertEqual(
-            {g for u in U.objects.exclude(username="admin") for g in u.groups.values_list("name", flat=True)},
+            {g for u in U.objects.exclude(username__in=["admin", "produttore"]) for g in u.groups.values_list("name", flat=True)},
             {COMMERCIALE, CUSTOMER, AMMINISTRAZIONE},
         )
         self.assertTrue(U.objects.get(username="amministrazione").has_perm("ws.add_prefattura"))
@@ -802,3 +802,122 @@ class SpedizioneTest(DocumentiTest):
         self.client.force_login(get_user_model().objects.create_user("z", password="z"))
         pf = documenti.genera_prefattura(self.ordine)
         self.assertTrue(self.client.get(reverse("pdf", args=["prefattura", pf.pk])).content.startswith(b"%PDF"))
+
+
+class AccessiTest(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        call_command("dati_demo", verbosity=0)
+
+    def accedi(self, username):
+        self.client.force_login(get_user_model().objects.get(username=username))
+
+    def test_utente_del_produttore_vede_solo_la_sua_area(self):
+        from .models import Spedizione
+
+        self.accedi("produttore")
+        pf, sp = PreFattura.objects.get(), Spedizione.objects.get()
+        vietate = ["dashboard", "progetti", "clienti", "listino", "prodotti", "magazzino", "ordini", "acquisti", "prefatture", "utenti", "cerca", "azienda"]
+        urls = [reverse(n) for n in vietate] + [
+            Progetto.objects.first().get_absolute_url(), pf.get_absolute_url(), reverse("pdf", args=["prefattura", pf.pk]),
+            reverse("prefattura_esporta", args=[pf.pk, "xml"]), reverse("pdf", args=["packing", sp.pk]), reverse("nuovo", args=["cliente"]),
+            "/media/modelli/modulo-brief-demo.docx", reverse("admin:index"),
+        ]  # fmt: skip
+        for url in urls:
+            with self.subTest(url=url):
+                r = self.client.get(url)
+                self.assertEqual((r.status_code, r["Location"]), (302, reverse("portale")))
+        self.assertEqual(self.client.post(reverse("progetto_avanza", args=[Progetto.objects.first().pk]))["Location"], reverse("portale"))
+
+    def test_area_produttore_senza_prezzi_ne_clienti_ne_progetti_altrui(self):
+        self.accedi("produttore")
+        r = self.client.get(reverse("portale"))
+        self.assertContains(r, "Shampoo delicato 250 ml")
+        self.assertNotContains(r, "Deodorante spray")  # progetto di un altro produttore
+        altrui = Progetto.objects.get(nome__startswith="Deodorante")
+        self.assertEqual(self.client.get(reverse("portale_progetto", args=[altrui.pk])).status_code, 404)
+        pagine = [r.content.decode()]
+        for p in Progetto.objects.filter(produttore__nome="Biopharma"):
+            risposta = self.client.get(reverse("portale_progetto", args=[p.pk]))
+            self.assertEqual(risposta.status_code, 200)
+            pagine.append(risposta.content.decode())
+        tutto = " ".join(pagine)
+        for vietato in ("€", "Profumerie Aurora", "Lumière Beauty Srl", "margine", "Listino", "1,560", "2,750"):
+            self.assertNotIn(vietato, tutto)
+        self.assertIn("Sodium Coco-Sulfate", tutto)  # l'INCI invece lo vede
+
+    def test_il_produttore_carica_il_tds(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        self.accedi("produttore")
+        a = Artwork.objects.get(stato="attesa_tds")
+        r = self.client.post(reverse("portale_tds", args=[a.pk]), {"file": SimpleUploadedFile("tds.pdf", b"%PDF-1.4 prova")})
+        self.assertRedirects(r, reverse("portale_progetto", args=[a.progetto_id]))
+        a.refresh_from_db()
+        self.assertEqual((a.stato, a.data_tds_ricevuto), ("bozza", oggi()))
+        self.assertTrue(a.progetto.eventi.filter(testo__contains="caricato dal produttore").exists())
+        r = self.client.get(reverse("portale_file", args=["tds", a.pk]))
+        self.assertEqual(b"".join(r.streaming_content), b"%PDF-1.4 prova")
+        altrui = Artwork.objects.create(cliente=Cliente.objects.first(), progetto=Progetto.objects.get(nome__startswith="Deodorante"), nome="X")
+        self.assertEqual(self.client.post(reverse("portale_tds", args=[altrui.pk]), {"file": SimpleUploadedFile("x.pdf", b"x")}).status_code, 404)
+        a.file_tds.delete()
+
+    def test_utente_interno_non_entra_nell_area_produttore(self):
+        self.accedi("customer")
+        self.assertRedirects(self.client.get(reverse("portale")), reverse("dashboard"))
+
+    def test_sezioni_nascoste(self):
+        from .models import Profilo
+
+        u = get_user_model().objects.get(username="commerciale")
+        Profilo.objects.create(user=u, sezioni_nascoste=["fatture", "listino"])
+        self.accedi("commerciale")
+        pf = PreFattura.objects.get()
+        for url in (reverse("prefatture"), pf.get_absolute_url(), reverse("pdf", args=["prefattura", pf.pk]), reverse("modifica", args=["prefattura", pf.pk]), reverse("listino"), reverse("nuovo", args=["vocelistino"])):
+            with self.subTest(url=url):
+                self.assertRedirects(self.client.get(url), reverse("dashboard"), fetch_redirect_response=False)
+        r = self.client.get(reverse("progetti"))
+        self.assertEqual(r.status_code, 200)
+        self.assertNotContains(r, 'href="/prefatture/"')
+        self.assertNotContains(r, 'href="/listino/"')
+        self.assertContains(r, 'href="/clienti/"')
+        r = self.client.get(reverse("dashboard"))
+        self.assertContains(r, "Il tuo accesso è limitato")
+        self.assertNotContains(r, "214/2026")  # numero di fattura della demo
+        self.assertNotContains(self.client.get(reverse("cerca") + "?q=PF-"), "PF-2026-001")
+
+    def test_gestione_utenti_solo_per_il_gestore(self):
+        from .models import Profilo
+
+        U = get_user_model()
+        self.accedi("amministrazione")
+        self.assertEqual(self.client.get(reverse("utenti")).status_code, 302)
+        self.assertEqual(self.client.post(reverse("utente_nuovo"), {"username": "intruso", "password": "Abc-12345-xyz", "attivo": "1"}).status_code, 302)
+        self.assertFalse(U.objects.filter(username="intruso").exists())
+
+        self.accedi("admin")
+        self.assertContains(self.client.get(reverse("utenti")), "Produttore · Biopharma")
+        r = self.client.post(reverse("utente_nuovo"), {"username": "luisa", "nome": "Luisa", "password": "Abc-12345-xyz", "attivo": "1", "ruoli": [COMMERCIALE], "nascoste": ["fatture", "inesistente"]})
+        self.assertRedirects(r, reverse("utenti"))
+        luisa = U.objects.get(username="luisa")
+        self.assertTrue(luisa.check_password("Abc-12345-xyz"))
+        self.assertEqual((list(luisa.groups.values_list("name", flat=True)), luisa.profilo.sezioni_nascoste, luisa.is_superuser), ([COMMERCIALE], ["fatture"], False))
+
+        cina = Produttore.objects.get(nome__startswith="Guangzhou")
+        self.client.post(reverse("utente_nuovo"), {"username": "terzista", "password": "Abc-12345-xyz", "attivo": "1", "ruoli": [CUSTOMER], "gestore": "1", "produttore": cina.pk})
+        t = U.objects.get(username="terzista")
+        self.assertEqual((t.profilo.produttore, t.groups.count(), t.is_superuser, t.is_staff), (cina, 0, False, False))
+
+        r = self.client.post(reverse("utente_nuovo"), {"username": "debole", "password": "123", "attivo": "1"})
+        self.assertEqual(r.status_code, 200)
+        self.assertFalse(U.objects.filter(username="debole").exists())
+        admin = U.objects.get(username="admin")
+        r = self.client.post(reverse("utente", args=[admin.pk]), {"username": "admin", "attivo": "1"})  # senza «gestore»
+        self.assertContains(r, "Non puoi togliere a te stesso")
+        admin.refresh_from_db()
+        self.assertTrue(admin.is_superuser)
+        self.client.post(reverse("utente", args=[luisa.pk]), {"username": "luisa", "ruoli": [COMMERCIALE]})  # disattivata, password invariata
+        luisa.refresh_from_db()
+        self.assertFalse(luisa.is_active)
+        self.assertTrue(luisa.check_password("Abc-12345-xyz"))
+        self.assertEqual(Profilo.objects.get(user=luisa).sezioni_nascoste, [])

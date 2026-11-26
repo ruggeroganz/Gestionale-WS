@@ -175,17 +175,26 @@ un test con il commercialista prima di usarlo.
   progetto, raccolte nel cruscotto.
 - **Ricerca** su clienti, progetti, prodotti, formule, packaging e documenti.
 
-### Ruoli
+### Ruoli e accessi
 
-Tutti gli utenti consultano tutto; inserire e modificare dipende dal gruppo
-(valori iniziali in `ws/ruoli.py`, poi modificabili dal pannello di
-amministrazione; `python manage.py imposta_ruoli` li ripristina).
+Inserire e modificare dipende dal ruolo (valori predefiniti in `ws/ruoli.py`):
 
 | Ruolo | Può inserire e modificare |
 | --- | --- |
-| Commerciale | Clienti, progetti, quotazioni, campionature, ordini cliente |
+| Commerciale | Clienti, progetti, brief, quotazioni, listino, campionature, ordini cliente |
 | Customer service e acquisti | Tutto tranne pre-fatture e dati azienda |
 | Amministrazione | Clienti, produttori, dati azienda, pre-fatture, fattura del produttore sugli ordini d'acquisto |
+
+Il **gestore** (menu utente → «Utenti e accessi») crea gli utenti, assegna i
+ruoli e può nascondere a ciascuno intere sezioni: le pagine nascoste non
+compaiono nel menu, non si aprono nemmeno dall'indirizzo diretto e restano
+fuori dalla ricerca; con sezioni nascoste il cruscotto mostra solo i promemoria.
+
+Un **utente del produttore** vede solo l'area riservata (`/area-produttore/`):
+i progetti affidati a quel produttore con formule e INCI, campionature,
+stabilità, TDS e artwork, brief inviati e quantità ordinate. Può caricare il
+TDS. Non vede prezzi, clienti né altre pagine: ogni altro indirizzo lo riporta
+alla sua area (`ws/accessi.py`).
 
 ## Non ancora incluso
 
