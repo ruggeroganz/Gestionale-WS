@@ -175,6 +175,25 @@ un test con il commercialista prima di usarlo.
   progetto, raccolte nel cruscotto.
 - **Ricerca** su clienti, progetti, prodotti, formule, packaging e documenti.
 
+### Posta e assistente
+
+`ws/assistente.py` legge una mail (.eml) con i suoi allegati PDF, chiede al
+modello di classificarla ed estrarne i dati (tipo, numero, data, importo,
+riferimenti, righe) e poi applica controlli a regole fisse: collega la mail a
+produttore, cliente e ordini e, per le fatture del produttore, confronta
+l'importo con l'ordine d'acquisto. L'assistente propone soltanto: ogni
+modifica viene confermata da una persona con un clic.
+
+- Le mail si caricano dalla pagina «Posta e assistente». Con una casella
+  dedicata, `python manage.py leggi_posta` scarica le non lette via IMAP
+  (variabili `POSTA_IMAP_HOST`, `POSTA_IMAP_UTENTE`, `POSTA_IMAP_PASSWORD`); va
+  eseguito a intervalli regolari.
+- Serve una chiave API in `ANTHROPIC_API_KEY`; senza, le mail si caricano ma
+  non vengono analizzate. Il modello si sceglie con `ASSISTENTE_MODELLO`
+  (predefinito `claude-opus-5-5`).
+- Il testo delle mail è contenuto esterno: viene passato al modello come dato
+  da analizzare, separato dalle istruzioni.
+
 ### Ruoli e accessi
 
 Inserire e modificare dipende dal ruolo (valori predefiniti in `ws/ruoli.py`):

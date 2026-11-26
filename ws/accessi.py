@@ -19,6 +19,7 @@ SEZIONI = {
     "ordini": ("Ordini clienti", ("ordini", "ordine", "ordine_stampa", "ordine_registra_packaging", "ordine_genera_acquisto", "ordine_genera_ddt", "ordine_genera_prefattura", "ordine_genera_spedizione")),
     "acquisti": ("Ordini ai produttori", ("acquisti", "acquisto")),
     "spedizioni": ("DDT e spedizioni", ("ddt_elenco", "ddt", "spedizioni", "spedizione")),
+    "posta": ("Posta e assistente", ("posta", "messaggio", "posta_carica", "messaggio_analizza", "messaggio_applica", "messaggio_stato")),
     "fatture": ("Pre-fatture", ("prefatture", "prefattura", "prefattura_esporta")),
 }  # fmt: skip
 PAGINA_SEZIONE = {pagina: chiave for chiave, (_, pagine) in SEZIONI.items() for pagina in pagine}

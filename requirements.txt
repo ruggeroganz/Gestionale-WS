@@ -5,3 +5,4 @@ dj-database-url>=2.2
 psycopg[binary]>=3.2
 weasyprint>=62
 lxml>=5
+anthropic>=1.0

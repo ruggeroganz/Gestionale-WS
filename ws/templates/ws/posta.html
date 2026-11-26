@@ -1,0 +1,17 @@
+{% extends "ws/base.html" %}
+{% block title %}Posta e assistente{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Posta e assistente</h1><div class="sub">L'assistente legge le mail con i loro allegati, le collega a ordini e progetti e segnala ciò che non torna. Propone: le modifiche le conferma sempre una persona.</div></div>
+  <div class="actions"><a class="small" href="?stato={% if stato == 'aperti' %}tutti{% else %}aperti{% endif %}">{% if stato == 'aperti' %}mostra anche le gestite{% else %}solo da gestire{% endif %}</a></div></div>
+{% if not configurato %}<div class="alert"><strong>Assistente non ancora attivo.</strong> Manca la chiave API: finché non viene impostata le mail si possono caricare e leggere, ma non vengono analizzate.</div>{% endif %}
+<div class="card"><div class="ch"><h2>Carica una mail</h2></div><form method="post" enctype="multipart/form-data" action="{% url 'posta_carica' %}" class="cb note" style="margin:0">{% csrf_token %}
+  <input type="file" name="file" id="id_file" accept=".eml,message/rfc822" multiple required aria-label="File .eml"><button class="btn">Carica e analizza</button>
+  <span class="small muted" style="align-self:center">File .eml: dal programma di posta, «Salva con nome» o trascina la mail su una cartella.</span></form></div>
+<div class="card"><div class="tw"><table><tr><th>Ricevuta</th><th>Mittente e oggetto</th><th>Tipo</th><th>Collegata a</th><th>Controlli</th><th>Stato</th></tr>
+{% for m in messaggi %}<tr><td class="small">{{ m.data|date:"d/m/Y H:i" }}</td><td><a href="{{ m.get_absolute_url }}">{{ m.oggetto|default:"(senza oggetto)" }}</a><div class="small muted">{{ m.mittente }}{% if m.allegati.all %} · {{ m.allegati.all|length }} allegati{% endif %}</div></td>
+  <td>{% for k, nome in tipi.items %}{% if k == m.analisi.tipo %}{{ nome }}{% endif %}{% endfor %}</td>
+  <td class="small">{% if m.ordine_acquisto %}<a href="{{ m.ordine_acquisto.get_absolute_url }}">{{ m.ordine_acquisto.numero }}</a><br>{% endif %}{% if m.ordine %}<a href="{{ m.ordine.get_absolute_url }}">{{ m.ordine.numero }}</a><br>{% endif %}{{ m.produttore|default:"" }}{{ m.cliente|default:"" }}</td>
+  <td>{% if m.da_verificare %}<span class="badge bad">non combacia</span>{% elif m.errore %}<span class="badge warn">non analizzata</span>{% elif m.stato != 'nuovo' %}<span class="badge ok">ok</span>{% endif %}</td>
+  <td><span class="badge {% if m.stato == 'gestito' %}ok{% elif m.stato == 'analizzato' %}info{% endif %}">{{ m.get_stato_display }}</span></td></tr>
+{% empty %}<tr><td colspan="6" class="muted">Nessuna mail.</td></tr>{% endfor %}</table></div></div>
+{% endblock %}

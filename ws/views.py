@@ -28,6 +28,7 @@ from .models import (
     OrdineAcquisto,
     OrdineCliente,
     Packaging,
+    MessaggioPosta,
     PreFattura,
     Profilo,
     Promemoria,
@@ -247,6 +248,7 @@ def dashboard(request):
             "riordini": flusso.riordini_da_sollecitare(),
             "tds": flusso.tds_da_sollecitare(),
             "fatture_diverse": flusso.fatture_produttore_diverse(),
+            "posta_da_gestire": MessaggioPosta.objects.exclude(stato=MessaggioPosta.Stato.GESTITO).count(),
             "oggi": flusso.oggi(),
         },
     )
@@ -1100,3 +1102,113 @@ def portale_tds(request, pk):
         Evento.objects.create(progetto=a.progetto, utente=request.user, testo=f"TDS per «{a.nome}» caricato dal produttore.", automatico=True)
         messages.success(request, "TDS caricato.")
     return redirect("portale_progetto", a.progetto_id)
+
+
+# --------------------------------------------------------------------------
+# Posta e assistente
+# --------------------------------------------------------------------------
+def crea_messaggio(dati_eml):
+    """Salva una mail (.eml) con i suoi allegati."""
+    from django.core.files.base import ContentFile
+
+    from . import assistente
+    from .models import AllegatoPosta
+
+    letto = assistente.leggi_eml(dati_eml)
+    m = MessaggioPosta(mittente=letto["mittente"][:300], destinatari=letto["destinatari"][:500], oggetto=letto["oggetto"][:500], data=letto["data"], corpo=letto["corpo"])
+    m.originale.save("messaggio.eml", ContentFile(dati_eml), save=False)
+    m.save()
+    for nome, _, contenuto in letto["allegati"]:
+        a = AllegatoPosta(messaggio=m, nome=nome[:255])
+        a.file.save(nome, ContentFile(contenuto), save=True)
+    return m
+
+
+@login_required
+def posta(request):
+    from . import assistente
+
+    stato = request.GET.get("stato", "aperti")
+    qs = MessaggioPosta.objects.select_related("cliente", "produttore", "ordine", "ordine_acquisto").prefetch_related("allegati")
+    if stato == "aperti":
+        qs = qs.exclude(stato=MessaggioPosta.Stato.GESTITO)
+    return render(request, "ws/posta.html", {"messaggi": qs[:200], "stato": stato, "configurato": assistente.configurato(), "tipi": assistente.TIPI})
+
+
+@richiede("add", MessaggioPosta)
+@require_POST
+def posta_carica(request):
+    from . import assistente
+
+    creati = []
+    for f in request.FILES.getlist("file"):
+        try:
+            creati.append(crea_messaggio(f.read()))
+        except assistente.AssistenteError as e:
+            messages.error(request, f"{f.name}: {e}")
+    if not creati:
+        return redirect("posta")
+    if assistente.configurato():
+        for m in creati:
+            try:
+                assistente.elabora(m)
+            except assistente.AssistenteError as e:
+                messages.error(request, f"{m.oggetto}: {e}")
+    messages.success(request, f"{len(creati)} mail caricate.")
+    return redirect(creati[0] if len(creati) == 1 else "posta")
+
+
+@login_required
+def messaggio(request, pk):
+    from . import assistente
+
+    m = get_object_or_404(MessaggioPosta.objects.select_related("cliente", "produttore", "ordine", "ordine_acquisto"), pk=pk)
+    return render(
+        request,
+        "ws/messaggio.html",
+        {"m": m, "tipo": assistente.TIPI.get((m.analisi or {}).get("tipo"), ""), "configurato": assistente.configurato(), "stati": MessaggioPosta.Stato.choices},
+    )
+
+
+@richiede("change", MessaggioPosta)
+@require_POST
+def messaggio_analizza(request, pk):
+    from . import assistente
+
+    m = get_object_or_404(MessaggioPosta, pk=pk)
+    if not assistente.configurato():
+        messages.error(request, "L'assistente non è ancora configurato: manca la chiave API.")
+    else:
+        try:
+            assistente.elabora(m)
+            messages.success(request, "Mail analizzata.")
+        except assistente.AssistenteError as e:
+            messages.error(request, str(e))
+    return redirect(m)
+
+
+@richiede("change", MessaggioPosta)
+@require_POST
+def messaggio_applica(request, pk, indice):
+    from . import assistente
+
+    m = get_object_or_404(MessaggioPosta, pk=pk)
+    proposta = (m.proposte or [None] * (indice + 1))[indice] if indice < len(m.proposte or []) else None
+    if proposta and proposta.get("azione") == "registra_fattura" and not puo(request.user, "change", OrdineAcquisto):
+        return _negato(request, m.get_absolute_url())
+    try:
+        assistente.applica(m, indice, request.user)
+        messages.success(request, "Fatto.")
+    except assistente.AssistenteError as e:
+        messages.error(request, str(e))
+    return redirect(m)
+
+
+@richiede("change", MessaggioPosta)
+@require_POST
+def messaggio_stato(request, pk):
+    m = get_object_or_404(MessaggioPosta, pk=pk)
+    if request.POST.get("stato") in MessaggioPosta.Stato.values:
+        m.stato = request.POST["stato"]
+        m.save(update_fields=["stato"])
+    return redirect(_next(request, m.get_absolute_url()))

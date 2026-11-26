@@ -1369,3 +1369,59 @@ class Profilo(models.Model):
 
     def __str__(self):
         return str(self.user)
+
+
+# --------------------------------------------------------------------------
+# Posta e assistente
+# --------------------------------------------------------------------------
+class MessaggioPosta(models.Model):
+    class Stato(models.TextChoices):
+        NUOVO = "nuovo", "Da analizzare"
+        ANALIZZATO = "analizzato", "Da gestire"
+        GESTITO = "gestito", "Gestito"
+
+    mittente = models.CharField(max_length=300)
+    destinatari = models.CharField(max_length=500, blank=True)
+    oggetto = models.CharField(max_length=500, blank=True)
+    data = models.DateTimeField(default=timezone.now)
+    corpo = models.TextField(blank=True)
+    originale = models.FileField(upload_to="posta/", blank=True)
+    stato = models.CharField(max_length=20, choices=Stato.choices, default=Stato.NUOVO)
+    analisi = models.JSONField(default=dict, blank=True)
+    controlli = models.JSONField(default=list, blank=True)
+    proposte = models.JSONField(default=list, blank=True)
+    errore = models.CharField(max_length=300, blank=True)
+    cliente = models.ForeignKey(Cliente, null=True, blank=True, on_delete=models.SET_NULL, related_name="posta")
+    produttore = models.ForeignKey(Produttore, null=True, blank=True, on_delete=models.SET_NULL, related_name="posta")
+    ordine = models.ForeignKey(OrdineCliente, null=True, blank=True, on_delete=models.SET_NULL, related_name="posta")
+    ordine_acquisto = models.ForeignKey(OrdineAcquisto, null=True, blank=True, on_delete=models.SET_NULL, related_name="posta")
+    creato = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-data", "-pk"]
+        verbose_name = "messaggio di posta"
+        verbose_name_plural = "messaggi di posta"
+
+    def __str__(self):
+        return self.oggetto or "(senza oggetto)"
+
+    def get_absolute_url(self):
+        return reverse("messaggio", args=[self.pk])
+
+    @property
+    def da_verificare(self):
+        return any(c.get("livello") == "errore" for c in self.controlli or [])
+
+
+class AllegatoPosta(models.Model):
+    messaggio = models.ForeignKey(MessaggioPosta, on_delete=models.CASCADE, related_name="allegati")
+    nome = models.CharField(max_length=255)
+    file = models.FileField(upload_to="posta/allegati/")
+
+    class Meta:
+        ordering = ["pk"]
+        verbose_name = "allegato"
+        verbose_name_plural = "allegati"
+
+    def __str__(self):
+        return self.nome

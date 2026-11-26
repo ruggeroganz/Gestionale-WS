@@ -1,0 +1,25 @@
+{% extends "ws/base.html" %}
+{% block title %}{{ m.oggetto }}{% endblock %}
+{% block content %}
+<div class="head"><div><h1>{{ m.oggetto|default:"(senza oggetto)" }}</h1><div class="sub"><a href="{% url 'posta' %}">← Posta</a> · da {{ m.mittente }} · {{ m.data|date:"d/m/Y H:i" }}{% if tipo %} · <span class="badge info">{{ tipo }}</span>{% endif %}</div></div>
+  <div class="actions"><form class="inline" method="post" action="{% url 'messaggio_analizza' m.pk %}">{% csrf_token %}<button class="btn sec" {% if not configurato %}disabled{% endif %}>{% if m.analisi %}Analizza di nuovo{% else %}Analizza{% endif %}</button></form>
+    <form class="inline" method="post" action="{% url 'messaggio_stato' m.pk %}">{% csrf_token %}{% if m.stato == 'gestito' %}<input type="hidden" name="stato" value="analizzato"><button class="btn sec">Riapri</button>{% else %}<input type="hidden" name="stato" value="gestito"><button class="btn">Segna come gestita</button>{% endif %}</form></div></div>
+{% if m.errore %}<div class="alert bad">{{ m.errore }}</div>{% endif %}
+{% for c in m.controlli %}<div class="alert {% if c.livello == 'errore' %}bad{% elif c.livello == 'ok' %}ok{% endif %}">{{ c.testo }}</div>{% endfor %}
+<div class="grid g21"><div>
+  {% if m.proposte %}<div class="card"><div class="ch"><h2>Cosa propone l'assistente</h2></div><div class="tw"><table>
+  {% for p in m.proposte %}<tr><td>{{ p.etichetta }}</td><td class="act">{% if p.applicata %}<span class="badge ok">fatto{% if p.da %} da {{ p.da }}{% endif %}</span>{% else %}<form class="inline" method="post" action="{% url 'messaggio_applica' m.pk forloop.counter0 %}">{% csrf_token %}<button class="btn sm">Conferma</button></form>{% endif %}</td></tr>{% endfor %}</table></div></div>{% endif %}
+  {% if m.analisi %}<div class="card"><div class="ch"><h2>Cosa dice la mail</h2></div><div class="cb"><p>{{ m.analisi.riepilogo }}</p>
+    {% if m.analisi.azioni_suggerite %}<h3 style="margin-top:12px">Da fare</h3><ul style="margin:0;padding-left:18px">{% for a in m.analisi.azioni_suggerite %}<li>{{ a }}</li>{% endfor %}</ul>{% endif %}</div>
+    {% if m.analisi.righe %}<div class="tw"><table><tr><th>Voce del documento</th><th class="n">Quantità</th><th class="n">Prezzo</th></tr>{% for r in m.analisi.righe %}<tr><td>{{ r.descrizione }}</td><td class="n">{{ r.quantita }}</td><td class="n">{{ r.prezzo_unitario }}</td></tr>{% endfor %}</table></div>{% endif %}</div>{% endif %}
+  <div class="card"><div class="ch"><h2>Testo della mail</h2></div><div class="cb" style="white-space:pre-wrap;overflow-wrap:anywhere">{{ m.corpo|default:"(nessun testo)" }}</div></div>
+</div><div>
+  <div class="card"><div class="ch"><h2>Dati estratti</h2></div><div class="cb"><dl class="dl">
+    <dt>Documento</dt><dd>{{ m.analisi.numero_documento|default:"—" }}</dd><dt>Data</dt><dd>{{ m.analisi.data_documento|default:"—" }}</dd><dt>Importo</dt><dd>{% if m.analisi.importo_totale %}{{ m.analisi.importo_totale }} €{% else %}—{% endif %}</dd>
+    <dt>Riferimenti</dt><dd>{{ m.analisi.riferimenti|join:", "|default:"—" }}</dd>
+    <dt>Produttore</dt><dd>{{ m.produttore|default:"—" }}</dd><dt>Cliente</dt><dd>{% if m.cliente %}<a href="{{ m.cliente.get_absolute_url }}">{{ m.cliente }}</a>{% else %}—{% endif %}</dd>
+    <dt>Ordine d'acquisto</dt><dd>{% if m.ordine_acquisto %}<a href="{{ m.ordine_acquisto.get_absolute_url }}">{{ m.ordine_acquisto.numero }}</a>{% else %}—{% endif %}</dd>
+    <dt>Ordine cliente</dt><dd>{% if m.ordine %}<a href="{{ m.ordine.get_absolute_url }}">{{ m.ordine.numero }}</a>{% else %}—{% endif %}</dd></dl></div></div>
+  <div class="card"><div class="ch"><h2>Allegati</h2></div>{% if m.allegati.all %}<div class="tw"><table>{% for a in m.allegati.all %}<tr><td><a href="{{ a.file.url }}">{{ a.nome }}</a></td><td class="n small muted">{{ a.file.size|filesizeformat }}</td></tr>{% endfor %}</table></div>{% else %}<div class="empty">Nessun allegato.</div>{% endif %}</div>
+</div></div>
+{% endblock %}

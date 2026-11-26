@@ -157,3 +157,6 @@ LOGOUT_REDIRECT_URL = "login"
 
 # Nome mostrato nell'interfaccia e sui documenti.
 NOME_AZIENDA = os.environ.get("NOME_AZIENDA", "WS")
+
+# Assistente sulla posta: la chiave si imposta nella variabile d'ambiente ANTHROPIC_API_KEY.
+ASSISTENTE_MODELLO = os.environ.get("ASSISTENTE_MODELLO", "claude-opus-5-5")

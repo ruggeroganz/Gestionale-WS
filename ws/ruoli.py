@@ -14,13 +14,14 @@ _SVILUPPO = ["progetto", "evento", "quotazione", "rigaquotazione", "campionatura
 _ANAGRAFICA_CLIENTI = ["cliente", "contatto"]
 _TECNICO = ["formula", "versioneformula", "teststabilita", "componente", "artwork", "packaging", "prodotto", "rigadistinta"]
 _ORDINI = ["ordinecliente", "rigaordine"]
+_POSTA = ["messaggioposta", "allegatoposta"]
 _LOGISTICA = ["movimentopackaging", "ordineacquisto", "rigaacquisto", "ddt", "rigaddt", "spedizione", "collo"]
 _FATTURE = ["prefattura", "rigaprefattura"]
 
 RUOLI = {
     COMMERCIALE: _ANAGRAFICA_CLIENTI + _SVILUPPO + _ORDINI,
-    CUSTOMER: _ANAGRAFICA_CLIENTI + ["produttore"] + _SVILUPPO + _TECNICO + _ORDINI + _LOGISTICA,
-    AMMINISTRAZIONE: _ANAGRAFICA_CLIENTI + ["produttore", "azienda", "evento", "promemoria", "ordineacquisto", "rigaacquisto"] + _FATTURE,
+    CUSTOMER: _ANAGRAFICA_CLIENTI + ["produttore"] + _SVILUPPO + _TECNICO + _ORDINI + _LOGISTICA + _POSTA,
+    AMMINISTRAZIONE: _ANAGRAFICA_CLIENTI + ["produttore", "azienda", "evento", "promemoria", "ordineacquisto", "rigaacquisto"] + _FATTURE + _POSTA,
 }
 
 

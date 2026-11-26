@@ -67,7 +67,7 @@ class Command(BaseCommand):
             User.objects.create_superuser("admin", password=PASSWORD)
 
         Azienda.objects.create(ragione_sociale="WS Srl (demo)", partita_iva="00000000000", indirizzo="Via Demo 1", cap="20100", comune="Milano", provincia="MI", iban="IT00X0000000000000000000000", contatto_emergenza="Mario Rossi (demo)\n+39 000 0000000", dichiarante="Mario Rossi / CEO (demo)")
-        bio = Produttore.objects.create(nome="Biopharma", paese="Italia", indirizzo="Zona industriale (indirizzo demo)", lead_time_giorni=150, note="Full service, produzione italiana.")
+        bio = Produttore.objects.create(nome="Biopharma", paese="Italia", email="ordini@biopharma-demo.example", indirizzo="Zona industriale (indirizzo demo)", lead_time_giorni=150, note="Full service, produzione italiana.")
         cina = Produttore.objects.create(nome="Guangzhou Beauty Manufacturing", paese="Cina", lead_time_giorni=180, note="Full service, include trasporto via mare.")
 
         lum = Cliente.objects.create(ragione_sociale="Lumière Beauty Srl", tipo="brand", stato="attivo", paese="Italia", indirizzo="Via Esempio 12", cap="20121", comune="Milano", provincia="MI", codice_sdi="ABC1234", pagamento="Bonifico 30 gg d.f.f.m.", partita_iva="00000000001", commerciale=utenti["commerciale"])
@@ -106,7 +106,7 @@ class Command(BaseCommand):
         flusso.registra_packaging(o1)
         MovimentoPackaging.objects.filter(ordine=o1).update(data=giorni(-45))
         oa = documenti.genera_ordine_acquisto(o1)
-        oa.data, oa.stato, oa.ddt_fornitore, oa.fattura_fornitore, oa.importo_fattura_fornitore = giorni(-194), "ricevuto", f"n. 812 del {giorni(-42):%d/%m/%Y}", f"n. 1045 del {giorni(-40):%d/%m/%Y}", oa.totale + D("180")
+        oa.data, oa.stato, oa.ddt_fornitore = giorni(-194), "ricevuto", f"n. 812 del {giorni(-42):%d/%m/%Y}"
         oa.save()
         ddt = documenti.genera_ddt(o1)
         ddt.data, ddt.vettore, ddt.colli, ddt.aspetto = giorni(-41), "Corriere demo", 14, "Cartoni su pallet"
@@ -169,6 +169,23 @@ class Command(BaseCommand):
         b = Brief(progetto=p4, stato="risposta", data_invio=giorni(-50), valori={"c2": "WS Srl (demo)", "c4": p4.nome, "c7": "Italia", "c8": "6000", "c10": True, "c13": True, "c16": "PRODUTTORE"})
         b.modello.save("modello-demo.docx", ContentFile(modello), save=False)
         b.save()
+
+        # --- Posta: la fattura del produttore arrivata per mail, già analizzata (qui senza chiamare il modello)
+        from email.message import EmailMessage
+
+        from ws import assistente
+        from ws.views import crea_messaggio
+
+        mail = EmailMessage()
+        mail["From"], mail["To"], mail["Subject"] = "Amministrazione Biopharma <ordini@biopharma-demo.example>", "ufficio@ws-demo.example", f"Fattura 1045 - Vs. ordine {oa.numero}"
+        mail["Date"] = "Mon, 23 Nov 2026 09:12:00 +0100"
+        mail.set_content(f"Buongiorno,\nin allegato la fattura n. 1045 relativa al Vs. ordine {oa.numero}.\nNel totale è compreso il trasporto dei pallet.\nCordiali saluti")
+        mail.add_attachment(b"%PDF-1.4 fattura dimostrativa", maintype="application", subtype="pdf", filename="fattura_1045.pdf")
+        m = crea_messaggio(mail.as_bytes())
+        m.analisi = {"tipo": "fattura_produttore", "riepilogo": f"Biopharma invia la fattura n. 1045 per l'ordine {oa.numero}. Il totale comprende una voce di trasporto pallet non prevista nell'ordine.", "numero_documento": "1045", "data_documento": f"{giorni(-3):%Y-%m-%d}", "importo_totale": str((oa.totale + D("180")).quantize(D("0.01"))), "riferimenti": [oa.numero], "righe": [{"descrizione": "Mousse volumizzante 200 ml", "quantita": "5000", "prezzo_unitario": "1.85"}, {"descrizione": "Trasporto pallet", "quantita": "1", "prezzo_unitario": "180.00"}], "azioni_suggerite": ["Confrontare la fattura con l'ordine d'acquisto.", "Chiedere a Biopharma chiarimenti sulla voce di trasporto."], "urgente": False}
+        m.controlli, m.proposte = assistente.collega_e_controlla(m)
+        m.stato = "analizzato"
+        m.save()
 
         # --- Listino e promemoria
         for riga in list(q1.righe.filter(tipo="prodotto")) + list(q3.righe.all()) + list(q4.righe.all()):
